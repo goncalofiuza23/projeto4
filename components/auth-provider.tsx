@@ -1,180 +1,222 @@
-"use client"
+"use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
-import { msalInstance, loginRequest } from "@/lib/microsoft-graph"
-import type { AuthenticationResult, AccountInfo } from "@azure/msal-browser"
-import { useToast } from "@/hooks/use-toast"
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
+import { msalInstance, loginRequest } from "@/lib/microsoft-graph";
+import type { AuthenticationResult, AccountInfo } from "@azure/msal-browser";
+import { useToast } from "@/hooks/use-toast";
 
 interface AuthContextType {
-  account: AccountInfo | null
-  accessToken: string | null
-  login: () => Promise<void>
-  logout: () => Promise<void>
-  isLoading: boolean
-  isAuthenticating: boolean
+  account: AccountInfo | null;
+  accessToken: string | null;
+  login: () => Promise<void>;
+  logout: () => Promise<void>;
+  isLoading: boolean;
+  isAuthenticating: boolean;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [account, setAccount] = useState<AccountInfo | null>(null)
-  const [accessToken, setAccessToken] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isAuthenticating, setIsAuthenticating] = useState(false)
-  const { toast } = useToast()
+  const [account, setAccount] = useState<AccountInfo | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
+    let isMounted = true;
+
     const initializeMsal = async () => {
       try {
-        await msalInstance.initialize()
-        const accounts = msalInstance.getAllAccounts()
+        // Garantir que a inicialização acontece apenas uma vez
+        await msalInstance.initialize();
+
+        if (!isMounted) return;
+
+        const accounts = msalInstance.getAllAccounts();
 
         if (accounts.length > 0) {
-          setAccount(accounts[0])
+          const activeAccount = accounts[0];
+          msalInstance.setActiveAccount(activeAccount); // Define a conta ativa
+          setAccount(activeAccount);
+
           try {
             const response = await msalInstance.acquireTokenSilent({
               ...loginRequest,
-              account: accounts[0],
-            })
-            setAccessToken(response.accessToken)
-
-            toast({
-              title: "Login automático realizado",
-              description: `Bem-vindo de volta, ${accounts[0].name || accounts[0].username}!`,
-            })
+              account: activeAccount,
+            });
+            setAccessToken(response.accessToken);
           } catch (error) {
-            console.error("Erro ao obter token silenciosamente:", error)
-            // Se falhar o token silencioso, limpar a conta
-            setAccount(null)
-            setAccessToken(null)
+            console.error("Erro ao obter token silenciosamente:", error);
+            setAccount(null);
+            setAccessToken(null);
           }
         }
-      } catch (error) {
-        console.error("Erro ao inicializar MSAL:", error)
-        toast({
-          title: "Erro de inicialização",
-          description: "Houve um problema ao inicializar o sistema de autenticação.",
-          variant: "destructive",
-        })
+      } catch (error: any) {
+        // Evita mostrar erro se já estiver inicializado
+        if (error.errorCode !== "browser_environment_not_supported") {
+          console.error("Erro ao inicializar MSAL:", error);
+        }
       } finally {
-        setIsLoading(false)
+        if (isMounted) setIsLoading(false);
       }
-    }
+    };
 
-    initializeMsal()
-  }, [toast])
+    initializeMsal();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []); // Removida a dependência do toast para evitar re-renders desnecessários
 
   const login = async () => {
-    if (isAuthenticating) return
+    if (isAuthenticating) return;
 
-    setIsAuthenticating(true)
+    // --- CORREÇÃO: Quebrar o "cadeado" preso do MSAL antes de tentar login ---
+    Object.keys(sessionStorage).forEach((key) => {
+      if (key.includes("interaction.status")) {
+        sessionStorage.removeItem(key);
+      }
+    });
+    // -------------------------------------------------------------------------
+
+    setIsAuthenticating(true);
     try {
-      // Tentar login silencioso primeiro se houver contas
-      const accounts = msalInstance.getAllAccounts()
+      const accounts = msalInstance.getAllAccounts();
+
+      // Tentar login silencioso se já houver uma conta reconhecida
       if (accounts.length > 0) {
         try {
+          const activeAccount = accounts[0];
+          msalInstance.setActiveAccount(activeAccount);
+
           const response = await msalInstance.acquireTokenSilent({
             ...loginRequest,
-            account: accounts[0],
-          })
-          setAccount(accounts[0])
-          setAccessToken(response.accessToken)
+            account: activeAccount,
+          });
+          setAccount(activeAccount);
+          setAccessToken(response.accessToken);
 
           toast({
             title: "Login realizado com sucesso",
-            description: `Bem-vindo, ${accounts[0].name || accounts[0].username}!`,
-          })
-          return
+            description: `Bem-vindo, ${activeAccount.name || activeAccount.username}!`,
+          });
+          return;
         } catch (silentError) {
-          console.log("Login silencioso falhou, tentando popup:", silentError)
+          console.log("Token expirado ou inválido. A abrir janela de login...");
         }
       }
 
-      // Se login silencioso falhar ou não houver contas, usar popup
+      // Se não houver conta ou o silencioso falhar, abre o Popup
       const response: AuthenticationResult = await msalInstance.loginPopup({
         ...loginRequest,
-        prompt: "select_account", // Permite escolher conta
-      })
+        prompt: "select_account",
+      });
 
-      setAccount(response.account)
-      setAccessToken(response.accessToken)
+      msalInstance.setActiveAccount(response.account);
+      setAccount(response.account);
+      setAccessToken(response.accessToken);
 
       toast({
         title: "Login realizado com sucesso",
         description: `Bem-vindo, ${response.account?.name || response.account?.username}!`,
-      })
+      });
     } catch (error: any) {
-      console.error("Erro no login:", error)
+      console.error("Detalhes do erro no login:", error);
 
-      // Tratar diferentes tipos de erro
-      if (error.errorCode === "user_cancelled" || error.message?.includes("user_cancelled")) {
-        // Usuário cancelou - não mostrar erro, é comportamento normal
-        console.log("Usuário cancelou o login")
-      } else if (error.errorCode === "popup_window_error" || error.message?.includes("popup")) {
+      // Ignora o erro se for apenas o popup a demorar a abrir
+      if (error.errorCode === "interaction_in_progress") {
+        return;
+      }
+
+      if (
+        error.errorCode === "user_cancelled" ||
+        error.message?.includes("user_cancelled")
+      ) {
+        console.log("Usuário cancelou o login");
+      } else if (
+        error.errorCode === "popup_window_error" ||
+        error.message?.includes("popup")
+      ) {
         toast({
           title: "Erro de popup",
-          description: "Por favor, permita popups para este site e tente novamente.",
+          description:
+            "Por favor, permita popups para este site e tente novamente.",
           variant: "destructive",
-        })
-      } else if (error.errorCode === "network_error") {
-        toast({
-          title: "Erro de conexão",
-          description: "Verifique sua conexão com a internet e tente novamente.",
-          variant: "destructive",
-        })
-      } else {
+        });
+      } else if (error.errorCode !== "monitor_window_timeout") {
         toast({
           title: "Erro no login",
-          description: "Não foi possível fazer login. Tente novamente em alguns instantes.",
+          description: "Não foi possível fazer login. Tente novamente.",
           variant: "destructive",
-        })
+        });
       }
     } finally {
-      setIsAuthenticating(false)
+      setIsAuthenticating(false);
     }
-  }
+  };
 
   const logout = async () => {
     try {
-      const account = msalInstance.getAllAccounts()[0]
+      const account =
+        msalInstance.getActiveAccount() || msalInstance.getAllAccounts()[0];
+
+      // O logoutPopup trata de limpar a cache da Microsoft de forma segura
       if (account) {
         await msalInstance.logoutPopup({
           account,
           mainWindowRedirectUri: window.location.origin,
-        })
+        });
       }
+    } catch (error) {
+      console.error("Erro no logout:", error);
+    } finally {
+      // Limpeza segura do estado
+      msalInstance.setActiveAccount(null);
+      setAccount(null);
+      setAccessToken(null);
 
-      setAccount(null)
-      setAccessToken(null)
+      // --- CORREÇÃO: Quebrar o "cadeado" preso do MSAL após o logout ---
+      Object.keys(sessionStorage).forEach((key) => {
+        if (key.includes("interaction.status")) {
+          sessionStorage.removeItem(key);
+        }
+      });
+      // -----------------------------------------------------------------
 
       toast({
         title: "Logout realizado",
         description: "Você foi desconectado com sucesso.",
-      })
-    } catch (error) {
-      console.error("Erro no logout:", error)
-      // Mesmo com erro, limpar o estado local
-      setAccount(null)
-      setAccessToken(null)
-
-      toast({
-        title: "Logout realizado",
-        description: "Você foi desconectado.",
-      })
+      });
     }
-  }
+  };
 
   return (
-    <AuthContext.Provider value={{ account, accessToken, login, logout, isLoading, isAuthenticating }}>
+    <AuthContext.Provider
+      value={{
+        account,
+        accessToken,
+        login,
+        logout,
+        isLoading,
+        isAuthenticating,
+      }}
+    >
       {children}
     </AuthContext.Provider>
-  )
+  );
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext)
+  const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error("useAuth deve ser usado dentro de um AuthProvider")
+    throw new Error("useAuth deve ser usado dentro de um AuthProvider");
   }
-  return context
+  return context;
 }

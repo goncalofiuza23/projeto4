@@ -1,32 +1,50 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Clock, Paperclip, ChevronDown, ChevronRight, Users, Mail, Settings } from "lucide-react"
-import type { EmailThread } from "@/lib/microsoft-graph"
-import type { EmailMetadata } from "@/lib/supabase"
-import { EmailViewer } from "./email-viewer"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useState, useEffect, memo } from "react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Clock,
+  Paperclip,
+  ChevronDown,
+  ChevronRight,
+  Mail,
+  Settings,
+} from "lucide-react";
+import type { EmailThread } from "@/lib/microsoft-graph";
+import type { EmailMetadata } from "@/lib/supabase";
+import { EmailViewer } from "./email-viewer";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { UserAvatar } from "./user-avatar";
+import { useAuth } from "./auth-provider";
+import { GraphService } from "@/lib/microsoft-graph";
 
 interface EmailThreadCardProps {
-  thread: EmailThread
-  emailsMetadata: Record<string, EmailMetadata>
-  onUpdateMetadata: (emailId: string, updates: Partial<EmailMetadata>) => void
-  onEmailSent?: () => void
-}
-
-const priorityColors = {
-  baixa: "bg-green-100 text-green-800",
-  media: "bg-yellow-100 text-yellow-800",
-  alta: "bg-orange-100 text-orange-800",
-  urgente: "bg-red-100 text-red-800",
+  thread: EmailThread;
+  emailsMetadata: Record<string, EmailMetadata>;
+  onUpdateMetadata: (emailId: string, updates: Partial<EmailMetadata>) => void;
+  onEmailSent?: () => void;
 }
 
 const priorityIcons = {
@@ -34,15 +52,22 @@ const priorityIcons = {
   media: "🟡",
   alta: "🟠",
   urgente: "🔴",
-}
+};
 
-export function EmailThreadCard({ thread, emailsMetadata, onUpdateMetadata, onEmailSent }: EmailThreadCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
-  const [selectedEmail, setSelectedEmail] = useState<string | null>(null)
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [newTag, setNewTag] = useState("")
-  const [priority, setPriority] = useState("media")
-  const [tags, setTags] = useState<string[]>([])
+export const EmailThreadCard = memo(function EmailThreadCard({
+  thread,
+  emailsMetadata,
+  onUpdateMetadata,
+  onEmailSent,
+}: EmailThreadCardProps) {
+  const { accessToken } = useAuth();
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [newTag, setNewTag] = useState("");
+  const [priority, setPriority] = useState("media");
+  const [tags, setTags] = useState<string[]>([]);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("pt-BR", {
@@ -50,107 +75,160 @@ export function EmailThreadCard({ thread, emailsMetadata, onUpdateMetadata, onEm
       month: "2-digit",
       hour: "2-digit",
       minute: "2-digit",
-    })
-  }
-
-  const getInitials = (email: string) => {
-    return email.split("@")[0].charAt(0).toUpperCase()
-  }
+    });
+  };
 
   const getParticipantsDisplay = () => {
     if (thread.participants.length <= 2) {
-      return thread.participants.join(", ")
+      return thread.participants.join(", ");
     }
-    return `${thread.participants.slice(0, 2).join(", ")} +${thread.participants.length - 2}`
-  }
+    return `${thread.participants.slice(0, 2).join(", ")} +${thread.participants.length - 2}`;
+  };
 
-  // Email mais recente (último da thread)
-  const latestEmail = thread.emails[thread.emails.length - 1]
-  const latestMetadata = emailsMetadata[latestEmail.id]
+  const latestEmail = thread.emails[thread.emails.length - 1];
+  const hasAttachments = thread.emails.some((e) => e.hasAttachments);
+  const isUnread = thread.hasUnread;
 
-  // Verificar se há anexos na thread
-  const hasAttachments = thread.emails.some((email) => email.hasAttachments)
-
-  // Obter todas as tags da thread
-  const allTags = new Set<string>()
-  thread.emails.forEach((email) => {
-    const metadata = emailsMetadata[email.id]
+  const allTags = new Set<string>();
+  thread.emails.forEach((e) => {
+    const metadata = emailsMetadata[e.id];
     if (metadata?.tags) {
-      metadata.tags.forEach((tag) => allTags.add(tag))
+      metadata.tags.forEach((tag) => allTags.add(tag));
     }
-  })
+  });
 
-  // Obter prioridade mais alta da thread
-  const priorities = ["urgente", "alta", "media", "baixa"]
-  let highestPriority = "media"
-  thread.emails.forEach((email) => {
-    const metadata = emailsMetadata[email.id]
+  const priorities = ["urgente", "alta", "media", "baixa"];
+  let highestPriority = "baixa";
+  thread.emails.forEach((e) => {
+    const metadata = emailsMetadata[e.id];
     if (metadata?.priority) {
-      const currentIndex = priorities.indexOf(metadata.priority)
-      const highestIndex = priorities.indexOf(highestPriority)
+      const currentIndex = priorities.indexOf(metadata.priority);
+      const highestIndex = priorities.indexOf(highestPriority);
       if (currentIndex < highestIndex) {
-        highestPriority = metadata.priority
+        highestPriority = metadata.priority;
       }
     }
-  })
+  });
 
-  const selectedEmailData = selectedEmail ? thread.emails.find((e) => e.id === selectedEmail) : null
+  const selectedEmailData = selectedEmail
+    ? thread.emails.find((e) => e.id === selectedEmail)
+    : null;
 
-  // Inicializar configurações com base no primeiro email da thread
-  useState(() => {
-    const firstEmailMetadata = emailsMetadata[thread.emails[0]?.id]
+  useEffect(() => {
+    const firstEmailMetadata = emailsMetadata[thread.emails[0]?.id];
     if (firstEmailMetadata) {
-      setPriority(firstEmailMetadata.priority)
-      setTags(firstEmailMetadata.tags)
+      setPriority(firstEmailMetadata.priority || "media");
+      setTags(firstEmailMetadata.tags || []);
     }
-  })
+  }, [emailsMetadata, thread.emails]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchSenderPhoto = async () => {
+      const senderEmail = latestEmail.from?.emailAddress?.address;
+      if (!accessToken || !senderEmail) return;
+      try {
+        const graphService = new GraphService(accessToken);
+        const photoUrl = await graphService.getProfilePhoto(senderEmail);
+        if (isMounted && photoUrl) {
+          setAvatarUrl(photoUrl);
+        }
+      } catch (error) {}
+    };
+    fetchSenderPhoto();
+    return () => {
+      isMounted = false;
+    };
+  }, [accessToken, latestEmail.from?.emailAddress?.address]);
+
+  const handleMarkAsRead = async (emailId: string) => {
+    if (!accessToken) return;
+    try {
+      const graphService = new GraphService(accessToken);
+      await graphService.markAsRead(emailId);
+
+      // Atualização otimista da UI
+      thread.emails = thread.emails.map((e) =>
+        e.id === emailId ? { ...e, isRead: true } : e,
+      );
+
+      if (thread.emails.every((e) => e.isRead)) {
+        thread.hasUnread = false;
+      }
+    } catch (error) {
+      console.error("Erro ao marcar como lido:", error);
+    }
+  };
 
   const handleAddTag = () => {
     if (newTag.trim() && !tags.includes(newTag.trim())) {
-      const updatedTags = [...tags, newTag.trim()]
-      setTags(updatedTags)
-      // Aplicar a todos os emails da thread
-      thread.emails.forEach((email) => {
-        onUpdateMetadata(email.id, { tags: updatedTags })
-      })
-      setNewTag("")
+      const updatedTags = [...tags, newTag.trim()];
+      setTags(updatedTags);
+      thread.emails.forEach((e) => {
+        onUpdateMetadata(e.id, { tags: updatedTags });
+      });
+      setNewTag("");
     }
-  }
+  };
 
   const handleRemoveTag = (tagToRemove: string) => {
-    const updatedTags = tags.filter((tag) => tag !== tagToRemove)
-    setTags(updatedTags)
-    // Aplicar a todos os emails da thread
-    thread.emails.forEach((email) => {
-      onUpdateMetadata(email.id, { tags: updatedTags })
-    })
-  }
+    const updatedTags = tags.filter((tag) => tag !== tagToRemove);
+    setTags(updatedTags);
+    thread.emails.forEach((e) => {
+      onUpdateMetadata(e.id, { tags: updatedTags });
+    });
+  };
 
   const handlePriorityChange = (newPriority: string) => {
-    setPriority(newPriority as EmailMetadata["priority"])
-    // Aplicar a todos os emails da thread
-    thread.emails.forEach((email) => {
-      onUpdateMetadata(email.id, { priority: newPriority as EmailMetadata["priority"] })
-    })
-  }
+    setPriority(newPriority as EmailMetadata["priority"]);
+    thread.emails.forEach((e) => {
+      onUpdateMetadata(e.id, {
+        priority: newPriority as EmailMetadata["priority"],
+      });
+    });
+  };
 
   return (
     <>
-      <Card className="mb-3 cursor-pointer hover:shadow-lg transition-all duration-200 border-l-4 hover:border-l-blue-500 group">
+      <Card
+        className={`mb-3 cursor-pointer hover:shadow-lg transition-all duration-200 border-l-4 group ${
+          isUnread
+            ? "border-l-blue-600 bg-blue-50/40 dark:bg-blue-900/10 shadow-sm"
+            : "hover:border-l-blue-500 border-l-transparent"
+        }`}
+      >
         <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
           <CardHeader className="pb-2">
-            <div className="flex items-start justify-between">
+            <div className="flex items-start gap-3 justify-between">
+              <UserAvatar
+                name={latestEmail.from?.emailAddress?.name}
+                email={latestEmail.from?.emailAddress?.address || ""}
+                imageUrl={avatarUrl}
+                className="h-10 w-10 mt-1 flex-shrink-0"
+              />
+
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <CollapsibleTrigger asChild>
                     <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                      {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      {isExpanded ? (
+                        <ChevronDown className="h-4 w-4" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" />
+                      )}
                     </Button>
                   </CollapsibleTrigger>
                   <h3
-                    className="font-medium text-sm truncate hover:text-blue-600 transition-colors flex-1"
+                    className={`text-sm truncate hover:text-blue-600 transition-colors flex-1 ${
+                      isUnread
+                        ? "font-bold text-slate-900 dark:text-slate-100"
+                        : "font-medium text-muted-foreground"
+                    }`}
                     title={thread.subject}
-                    onClick={() => setSelectedEmail(latestEmail.id)}
+                    onClick={() => {
+                      setSelectedEmail(latestEmail.id);
+                      if (!latestEmail.isRead) handleMarkAsRead(latestEmail.id);
+                    }}
                   >
                     {thread.subject}
                   </h3>
@@ -161,12 +239,17 @@ export function EmailThreadCard({ thread, emailsMetadata, onUpdateMetadata, onEm
                   )}
                 </div>
 
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
-                  <Users className="h-3 w-3" />
+                <div
+                  className={`flex items-center gap-2 text-xs mb-2 ${isUnread ? "text-slate-700 font-medium" : "text-muted-foreground"}`}
+                >
                   <span className="truncate">{getParticipantsDisplay()}</span>
                 </div>
 
-                <p className="text-xs text-muted-foreground line-clamp-2">{latestEmail.bodyPreview}</p>
+                <p
+                  className={`text-xs line-clamp-2 ${isUnread ? "text-slate-800" : "text-muted-foreground"}`}
+                >
+                  {latestEmail.bodyPreview}
+                </p>
               </div>
 
               <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
@@ -174,9 +257,9 @@ export function EmailThreadCard({ thread, emailsMetadata, onUpdateMetadata, onEm
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                   >
-                    <Settings className="h-3 w-3" />
+                    <Settings className="h-4 w-4" />
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-md">
@@ -186,7 +269,10 @@ export function EmailThreadCard({ thread, emailsMetadata, onUpdateMetadata, onEm
                   <div className="space-y-4">
                     <div>
                       <Label htmlFor="priority">Prioridade</Label>
-                      <Select value={priority} onValueChange={handlePriorityChange}>
+                      <Select
+                        value={priority}
+                        onValueChange={handlePriorityChange}
+                      >
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
@@ -205,7 +291,9 @@ export function EmailThreadCard({ thread, emailsMetadata, onUpdateMetadata, onEm
                           value={newTag}
                           onChange={(e) => setNewTag(e.target.value)}
                           placeholder="Nova tag"
-                          onKeyPress={(e) => e.key === "Enter" && handleAddTag()}
+                          onKeyPress={(e) =>
+                            e.key === "Enter" && handleAddTag()
+                          }
                         />
                         <Button onClick={handleAddTag} size="sm">
                           Adicionar
@@ -233,75 +321,82 @@ export function EmailThreadCard({ thread, emailsMetadata, onUpdateMetadata, onEm
           <CardContent className="pt-0">
             <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1">
+                <div
+                  className={`flex items-center gap-1 ${isUnread ? "text-blue-600 font-medium" : ""}`}
+                >
                   <Clock className="h-3 w-3" />
                   {formatDate(thread.lastActivity)}
                 </div>
                 {hasAttachments && <Paperclip className="h-3 w-3" />}
-                {thread.hasUnread && (
-                  <Badge variant="secondary" className="text-xs">
-                    Novo
+                {isUnread && (
+                  <Badge className="bg-blue-600 text-white text-[10px] h-4 px-1">
+                    NÃO LIDO
                   </Badge>
                 )}
               </div>
-
               <div className="flex items-center gap-1">
-                <span className="text-xs">{priorityIcons[highestPriority as keyof typeof priorityIcons]}</span>
+                <span className="text-xs">
+                  {priorityIcons[highestPriority as keyof typeof priorityIcons]}
+                </span>
               </div>
             </div>
 
-            {Array.from(allTags).length > 0 && (
-              <div className="flex flex-wrap gap-1 mb-2">
-                {Array.from(allTags)
-                  .slice(0, 3)
-                  .map((tag) => (
-                    <Badge key={tag} variant="outline" className="text-xs">
-                      {tag}
-                    </Badge>
-                  ))}
-                {Array.from(allTags).length > 3 && (
-                  <Badge variant="outline" className="text-xs">
-                    +{Array.from(allTags).length - 3}
-                  </Badge>
-                )}
-              </div>
-            )}
-
-            {/* Lista expandida de emails na thread */}
             <CollapsibleContent className="space-y-2">
               <div className="border-t pt-3 mt-3">
-                <h4 className="text-sm font-medium mb-2">Conversação ({thread.totalEmails - 1} emails)</h4>
-                <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {/* Filtrando emails com IDs únicos antes de mapear */}
+                <h4 className="text-sm font-medium mb-2 text-muted-foreground">
+                  Conversação ({thread.totalEmails} mensagens)
+                </h4>
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                   {thread.emails
-                    .filter((email, index, self) => 
-                      index === self.findIndex((e) => e.id === email.id)
+                    .filter(
+                      (e, index, self) =>
+                        index === self.findIndex((t) => t.id === e.id),
                     )
-                    .map((email, index) => (
+                    .map((item) => (
                       <div
-                        key={email.id}
-                        className="flex items-center gap-3 p-2 rounded border hover:bg-muted/50 cursor-pointer transition-colors"
-                        onClick={() => setSelectedEmail(email.id)}
+                        key={item.id}
+                        className={`flex items-center gap-3 p-2 rounded border transition-colors cursor-pointer ${
+                          !item.isRead
+                            ? "bg-blue-50/50 border-blue-100 hover:bg-blue-100/50"
+                            : "hover:bg-muted/50"
+                        }`}
+                        onClick={() => {
+                          setSelectedEmail(item.id);
+                          if (!item.isRead) handleMarkAsRead(item.id);
+                        }}
                       >
-                        <Avatar className="h-6 w-6">
-                          <AvatarFallback className="text-xs">
-                            {getInitials(email.from?.emailAddress?.address || "")}
-                          </AvatarFallback>
-                        </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-medium truncate">
-                            {email.isFromMe
-                              ? "Você"
-                              : email.from?.emailAddress?.name || email.from?.emailAddress?.address}
-                          </span>
-                          {email.isFromMe && <Mail className="h-3 w-3 text-blue-500" />}
-                          {!email.isRead && <div className="w-2 h-2 bg-blue-500 rounded-full" />}
+                        <UserAvatar
+                          name={item.from?.emailAddress?.name}
+                          email={item.from?.emailAddress?.address || ""}
+                          className="h-6 w-6 flex-shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`text-xs truncate ${!item.isRead ? "font-bold text-slate-900" : "font-medium text-muted-foreground"}`}
+                            >
+                              {item.isFromMe
+                                ? "Você"
+                                : item.from?.emailAddress?.name ||
+                                  item.from?.emailAddress?.address}
+                            </span>
+                            {item.isFromMe && (
+                              <Mail className="h-3 w-3 text-blue-500" />
+                            )}
+                            {!item.isRead && (
+                              <div className="w-2 h-2 bg-blue-600 rounded-full" />
+                            )}
+                          </div>
+                          <p
+                            className={`text-xs truncate ${!item.isRead ? "text-slate-800 font-medium" : "text-muted-foreground"}`}
+                          >
+                            {item.bodyPreview}
+                          </p>
                         </div>
-                        <p className="text-xs text-muted-foreground truncate">{email.bodyPreview}</p>
+                        <div className="text-[10px] text-muted-foreground whitespace-nowrap">
+                          {formatDate(item.receivedDateTime)}
+                        </div>
                       </div>
-                      <div className="text-xs text-muted-foreground">{formatDate(email.receivedDateTime)}</div>
-                    </div>
                     ))}
                 </div>
               </div>
@@ -310,7 +405,6 @@ export function EmailThreadCard({ thread, emailsMetadata, onUpdateMetadata, onEm
         </Collapsible>
       </Card>
 
-      {/* Viewer para email selecionado */}
       {selectedEmailData && (
         <EmailViewer
           email={selectedEmailData}
@@ -323,5 +417,5 @@ export function EmailThreadCard({ thread, emailsMetadata, onUpdateMetadata, onEm
         />
       )}
     </>
-  )
-}
+  );
+});

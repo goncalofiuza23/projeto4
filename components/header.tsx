@@ -1,26 +1,59 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { useAuth } from "./auth-provider"
-import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Mail, LogOut, Plus, Loader2 } from "lucide-react"
-import { EmailComposer } from "./email-composer"
+import { useState, useEffect } from "react";
+import { useAuth } from "./auth-provider";
+import { Button } from "@/components/ui/button";
+import { Mail, LogOut, Plus, Loader2 } from "lucide-react";
+import { EmailComposer } from "./email-composer";
+import { UserAvatar } from "./user-avatar";
+import { GraphService } from "@/lib/microsoft-graph";
 
 interface HeaderProps {
-  onEmailSent?: () => void
+  onEmailSent?: () => void;
 }
 
 export function Header({ onEmailSent }: HeaderProps) {
-  const { account, login, logout, isLoading, isAuthenticating } = useAuth()
-  const [isComposerOpen, setIsComposerOpen] = useState(false)
+  // 1. Adicionámos o accessToken aqui
+  const { account, accessToken, login, logout, isLoading, isAuthenticating } =
+    useAuth();
+  const [isComposerOpen, setIsComposerOpen] = useState(false);
+  // 2. Estado para guardar a foto
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   const handleEmailSent = () => {
-    setIsComposerOpen(false)
+    setIsComposerOpen(false);
     if (onEmailSent) {
-      onEmailSent()
+      onEmailSent();
     }
-  }
+  };
+
+  // 3. O trabalhador de fundo que vai buscar a tua própria foto à Microsoft
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchMyPhoto = async () => {
+      // Se não houver token ou email, não faz nada
+      if (!accessToken || !account?.username) return;
+
+      try {
+        const graphService = new GraphService(accessToken);
+        // Como o teu GraphService já sabe que este é o teu e-mail, ele vai usar a rota "/me" automaticamente!
+        const photoUrl = await graphService.getProfilePhoto(account.username);
+
+        if (isMounted && photoUrl) {
+          setAvatarUrl(photoUrl);
+        }
+      } catch (error) {
+        // Falha silenciosa se não houver foto (mostra as iniciais coloridas)
+      }
+    };
+
+    fetchMyPhoto();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [accessToken, account?.username]);
 
   if (isLoading) {
     return (
@@ -36,7 +69,7 @@ export function Header({ onEmailSent }: HeaderProps) {
           </div>
         </div>
       </header>
-    )
+    );
   }
 
   return (
@@ -53,15 +86,24 @@ export function Header({ onEmailSent }: HeaderProps) {
               <>
                 <Button onClick={() => setIsComposerOpen(true)}>
                   <Plus className="h-4 w-4 mr-2" />
-                  Novo Email
+                  Novo E-mail
                 </Button>
                 <div className="flex items-center gap-2">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback>{account.name?.charAt(0) || account.username?.charAt(0) || "U"}</AvatarFallback>
-                  </Avatar>
+                  {/* 4. Trocámos o Avatar antigo pelo nosso UserAvatar inteligente! */}
+                  <UserAvatar
+                    name={account.name}
+                    email={account.username || ""}
+                    imageUrl={avatarUrl}
+                    className="h-8 w-8"
+                  />
+
                   <div className="hidden sm:block">
-                    <p className="text-sm font-medium">{account.name || account.username}</p>
-                    <p className="text-xs text-muted-foreground">{account.username}</p>
+                    <p className="text-sm font-medium">
+                      {account.name || account.username}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {account.username}
+                    </p>
                   </div>
                 </div>
                 <Button variant="outline" size="sm" onClick={logout}>
@@ -93,5 +135,5 @@ export function Header({ onEmailSent }: HeaderProps) {
         onEmailSent={handleEmailSent}
       />
     </>
-  )
+  );
 }
