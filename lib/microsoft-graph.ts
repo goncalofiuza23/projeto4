@@ -8,6 +8,8 @@ const msalConfig: Configuration = {
     clientId: process.env.NEXT_PUBLIC_MICROSOFT_CLIENT_ID || "",
     authority: "https://login.microsoftonline.com/common",
     redirectUri: typeof window !== "undefined" ? window.location.origin : "",
+    postLogoutRedirectUri:
+      typeof window !== "undefined" ? window.location.origin : "/",
   },
   cache: {
     cacheLocation: "sessionStorage",

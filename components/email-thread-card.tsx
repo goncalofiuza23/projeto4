@@ -45,6 +45,7 @@ interface EmailThreadCardProps {
   emailsMetadata: Record<string, EmailMetadata>;
   onUpdateMetadata: (emailId: string, updates: Partial<EmailMetadata>) => void;
   onEmailSent?: () => void;
+  onThreadUpdated?: (thread: EmailThread) => void;
 }
 
 const priorityIcons = {
@@ -59,6 +60,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
   emailsMetadata,
   onUpdateMetadata,
   onEmailSent,
+  onThreadUpdated,
 }: EmailThreadCardProps) {
   const { accessToken } = useAuth();
   const [isExpanded, setIsExpanded] = useState(false);
@@ -88,14 +90,6 @@ export const EmailThreadCard = memo(function EmailThreadCard({
   const latestEmail = thread.emails[thread.emails.length - 1];
   const hasAttachments = thread.emails.some((e) => e.hasAttachments);
   const isUnread = thread.hasUnread;
-
-  const allTags = new Set<string>();
-  thread.emails.forEach((e) => {
-    const metadata = emailsMetadata[e.id];
-    if (metadata?.tags) {
-      metadata.tags.forEach((tag) => allTags.add(tag));
-    }
-  });
 
   const priorities = ["urgente", "alta", "media", "baixa"];
   let highestPriority = "baixa";
@@ -147,13 +141,18 @@ export const EmailThreadCard = memo(function EmailThreadCard({
       const graphService = new GraphService(accessToken);
       await graphService.markAsRead(emailId);
 
-      // Atualização otimista da UI
-      thread.emails = thread.emails.map((e) =>
+      const updatedEmails = thread.emails.map((e) =>
         e.id === emailId ? { ...e, isRead: true } : e,
       );
 
-      if (thread.emails.every((e) => e.isRead)) {
-        thread.hasUnread = false;
+      const updatedThread = {
+        ...thread,
+        emails: updatedEmails,
+        hasUnread: updatedEmails.some((e) => !e.isRead),
+      };
+
+      if (onThreadUpdated) {
+        onThreadUpdated(updatedThread);
       }
     } catch (error) {
       console.error("Erro ao marcar como lido:", error);
@@ -191,10 +190,10 @@ export const EmailThreadCard = memo(function EmailThreadCard({
   return (
     <>
       <Card
-        className={`mb-3 cursor-pointer hover:shadow-lg transition-all duration-200 border-l-4 group ${
+        className={`mb-3 bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300 border-l-4 group relative ${
           isUnread
-            ? "border-l-blue-600 bg-blue-50/40 dark:bg-blue-900/10 shadow-sm"
-            : "hover:border-l-blue-500 border-l-transparent"
+            ? "border-l-blue-600 ring-1 ring-blue-100"
+            : "hover:border-l-blue-400 border-l-transparent border border-slate-200/60"
         }`}
       >
         <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
@@ -209,23 +208,31 @@ export const EmailThreadCard = memo(function EmailThreadCard({
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <CollapsibleTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                      {isExpanded ? (
-                        <ChevronDown className="h-4 w-4" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </CollapsibleTrigger>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                    onClick={(e) => {
+                      e.stopPropagation(); // Trava o drag para expandir
+                      setIsExpanded(!isExpanded);
+                    }}
+                  >
+                    {isExpanded ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                  </Button>
+
                   <h3
-                    className={`text-sm truncate hover:text-blue-600 transition-colors flex-1 ${
+                    className={`text-sm truncate hover:text-blue-600 transition-colors flex-1 cursor-pointer ${
                       isUnread
                         ? "font-bold text-slate-900 dark:text-slate-100"
                         : "font-medium text-muted-foreground"
                     }`}
                     title={thread.subject}
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation(); // Trava o drag para abrir o email
                       setSelectedEmail(latestEmail.id);
                       if (!latestEmail.isRead) handleMarkAsRead(latestEmail.id);
                     }}
@@ -234,87 +241,85 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                   </h3>
                   {thread.totalEmails > 1 && (
                     <Badge variant="secondary" className="text-xs">
-                      {thread.totalEmails - 1}
+                      {thread.totalEmails}
                     </Badge>
                   )}
                 </div>
 
-                <div
-                  className={`flex items-center gap-2 text-xs mb-2 ${isUnread ? "text-slate-700 font-medium" : "text-muted-foreground"}`}
-                >
+                <div className="flex items-center gap-2 text-xs mb-2 text-muted-foreground">
                   <span className="truncate">{getParticipantsDisplay()}</span>
                 </div>
 
-                <p
-                  className={`text-xs line-clamp-2 ${isUnread ? "text-slate-800" : "text-muted-foreground"}`}
-                >
+                <p className="text-xs line-clamp-2 text-muted-foreground">
                   {latestEmail.bodyPreview}
                 </p>
               </div>
 
-              <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-                <DialogTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                  >
-                    <Settings className="h-4 w-4" />
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Configurações da Conversa</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="priority">Prioridade</Label>
-                      <Select
-                        value={priority}
-                        onValueChange={handlePriorityChange}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="baixa">🟢 Baixa</SelectItem>
-                          <SelectItem value="media">🟡 Média</SelectItem>
-                          <SelectItem value="alta">🟠 Alta</SelectItem>
-                          <SelectItem value="urgente">🔴 Urgente</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label htmlFor="tags">Tags</Label>
-                      <div className="flex gap-2 mt-1">
-                        <Input
-                          value={newTag}
-                          onChange={(e) => setNewTag(e.target.value)}
-                          placeholder="Nova tag"
-                          onKeyPress={(e) =>
-                            e.key === "Enter" && handleAddTag()
-                          }
-                        />
-                        <Button onClick={handleAddTag} size="sm">
-                          Adicionar
-                        </Button>
+              <div onClick={(e) => e.stopPropagation()}>
+                <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                    >
+                      <Settings className="h-4 w-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Configurações da Conversa</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="priority">Prioridade</Label>
+                        <Select
+                          value={priority}
+                          onValueChange={handlePriorityChange}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="baixa">🟢 Baixa</SelectItem>
+                            <SelectItem value="media">🟡 Média</SelectItem>
+                            <SelectItem value="alta">🟠 Alta</SelectItem>
+                            <SelectItem value="urgente">🔴 Urgente</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {tags.map((tag) => (
-                          <Badge
-                            key={tag}
-                            variant="secondary"
-                            className="text-xs cursor-pointer hover:bg-red-100"
-                            onClick={() => handleRemoveTag(tag)}
-                          >
-                            {tag} ×
-                          </Badge>
-                        ))}
+                      <div>
+                        <Label htmlFor="tags">Tags</Label>
+                        <div className="flex gap-2 mt-1">
+                          <Input
+                            value={newTag}
+                            onChange={(e) => setNewTag(e.target.value)}
+                            placeholder="Nova tag"
+                            onKeyPress={(e) =>
+                              e.key === "Enter" && handleAddTag()
+                            }
+                          />
+                          <Button onClick={handleAddTag} size="sm">
+                            Adicionar
+                          </Button>
+                        </div>
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {tags.map((tag) => (
+                            <Badge
+                              key={tag}
+                              variant="secondary"
+                              className="text-xs cursor-pointer hover:bg-red-100"
+                              onClick={() => handleRemoveTag(tag)}
+                            >
+                              {tag} ×
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </DialogContent>
-              </Dialog>
+                  </DialogContent>
+                </Dialog>
+              </div>
             </div>
           </CardHeader>
 
@@ -328,11 +333,6 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                   {formatDate(thread.lastActivity)}
                 </div>
                 {hasAttachments && <Paperclip className="h-3 w-3" />}
-                {isUnread && (
-                  <Badge className="bg-blue-600 text-white text-[10px] h-4 px-1">
-                    NÃO LIDO
-                  </Badge>
-                )}
               </div>
               <div className="flex items-center gap-1">
                 <span className="text-xs">
@@ -344,60 +344,44 @@ export const EmailThreadCard = memo(function EmailThreadCard({
             <CollapsibleContent className="space-y-2">
               <div className="border-t pt-3 mt-3">
                 <h4 className="text-sm font-medium mb-2 text-muted-foreground">
-                  Conversação ({thread.totalEmails} mensagens)
+                  Conversação
                 </h4>
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                  {thread.emails
-                    .filter(
-                      (e, index, self) =>
-                        index === self.findIndex((t) => t.id === e.id),
-                    )
-                    .map((item) => (
-                      <div
-                        key={item.id}
-                        className={`flex items-center gap-3 p-2 rounded border transition-colors cursor-pointer ${
-                          !item.isRead
-                            ? "bg-blue-50/50 border-blue-100 hover:bg-blue-100/50"
-                            : "hover:bg-muted/50"
-                        }`}
-                        onClick={() => {
-                          setSelectedEmail(item.id);
-                          if (!item.isRead) handleMarkAsRead(item.id);
-                        }}
-                      >
-                        <UserAvatar
-                          name={item.from?.emailAddress?.name}
-                          email={item.from?.emailAddress?.address || ""}
-                          className="h-6 w-6 flex-shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`text-xs truncate ${!item.isRead ? "font-bold text-slate-900" : "font-medium text-muted-foreground"}`}
-                            >
-                              {item.isFromMe
-                                ? "Você"
-                                : item.from?.emailAddress?.name ||
-                                  item.from?.emailAddress?.address}
-                            </span>
-                            {item.isFromMe && (
-                              <Mail className="h-3 w-3 text-blue-500" />
-                            )}
-                            {!item.isRead && (
-                              <div className="w-2 h-2 bg-blue-600 rounded-full" />
-                            )}
-                          </div>
-                          <p
-                            className={`text-xs truncate ${!item.isRead ? "text-slate-800 font-medium" : "text-muted-foreground"}`}
+                  {thread.emails.map((item) => (
+                    <div
+                      key={item.id}
+                      className={`flex items-center gap-3 p-2 rounded border transition-colors cursor-pointer ${
+                        !item.isRead
+                          ? "bg-blue-50/50 border-blue-100"
+                          : "hover:bg-muted/50"
+                      }`}
+                      onClick={(e) => {
+                        e.stopPropagation(); // Trava o drag na lista interna
+                        setSelectedEmail(item.id);
+                        if (!item.isRead) handleMarkAsRead(item.id);
+                      }}
+                    >
+                      <UserAvatar
+                        name={item.from?.emailAddress?.name}
+                        email={item.from?.emailAddress?.address || ""}
+                        className="h-6 w-6 flex-shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-xs truncate ${!item.isRead ? "font-bold" : ""}`}
                           >
-                            {item.bodyPreview}
-                          </p>
+                            {item.isFromMe
+                              ? "Você"
+                              : item.from?.emailAddress?.name}
+                          </span>
                         </div>
-                        <div className="text-[10px] text-muted-foreground whitespace-nowrap">
-                          {formatDate(item.receivedDateTime)}
-                        </div>
+                        <p className="text-xs truncate text-muted-foreground">
+                          {item.bodyPreview}
+                        </p>
                       </div>
-                    ))}
+                    </div>
+                  ))}
                 </div>
               </div>
             </CollapsibleContent>

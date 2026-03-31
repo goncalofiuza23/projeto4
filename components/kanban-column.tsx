@@ -17,6 +17,7 @@ import {
   ChevronRight,
   PanelLeftClose,
   PanelLeftOpen,
+  Inbox,
 } from "lucide-react";
 
 interface KanbanColumnProps {
@@ -25,6 +26,7 @@ interface KanbanColumnProps {
   threads: EmailThread[];
   emailsMetadata: Record<string, EmailMetadata>;
   onUpdateMetadata: (emailId: string, updates: Partial<EmailMetadata>) => void;
+  onThreadUpdated?: (thread: EmailThread) => void;
   color: string;
   icon: string;
   onEmailSent?: () => void;
@@ -45,6 +47,7 @@ export function KanbanColumn({
   threads,
   emailsMetadata,
   onUpdateMetadata,
+  onThreadUpdated,
   color,
   icon,
   onEmailSent,
@@ -56,6 +59,24 @@ export function KanbanColumn({
 
   const isOverCardInColumn = threads.some((t) => t.id === over?.id);
   const isDropTarget = isOver || isOverCardInColumn || over?.id === id;
+
+  // NOVA FUNÇÃO: Deteta a cor base da coluna para aplicar na borda do topo
+  const getBorderColorClass = (colorStr: string) => {
+    if (!colorStr) return "border-t-slate-300";
+    if (colorStr.includes("blue")) return "border-t-blue-500";
+    if (colorStr.includes("red")) return "border-t-red-500";
+    if (colorStr.includes("green")) return "border-t-green-500";
+    if (colorStr.includes("yellow")) return "border-t-yellow-400";
+    if (colorStr.includes("orange")) return "border-t-orange-500";
+    if (colorStr.includes("purple")) return "border-t-purple-500";
+    if (colorStr.includes("indigo")) return "border-t-indigo-500";
+    if (colorStr.includes("pink")) return "border-t-pink-500";
+    if (colorStr.includes("rose")) return "border-t-rose-500";
+    if (colorStr.includes("teal")) return "border-t-teal-500";
+    return "border-t-slate-300"; // Cor por defeito
+  };
+
+  const topBorderClass = getBorderColorClass(color);
 
   const groupedThreads = useMemo(() => {
     const getThreadHighestPriority = (thread: EmailThread) => {
@@ -120,7 +141,7 @@ export function KanbanColumn({
   if (isCollapsed) {
     return (
       <div
-        className="w-12 h-[calc(100vh-180px)] bg-slate-100/80 border rounded-lg flex flex-col items-center py-2 transition-all duration-300 hover:bg-slate-200/80 cursor-pointer group"
+        className={`w-12 h-[calc(100vh-180px)] bg-slate-100/80 border border-slate-200 rounded-lg flex flex-col items-center py-2 transition-all duration-300 hover:bg-slate-200/80 cursor-pointer group border-t-4 ${topBorderClass}`}
         onClick={onToggleCollapse}
       >
         <Button
@@ -145,7 +166,9 @@ export function KanbanColumn({
 
   // --- DESIGN PARA COLUNA NORMAL ---
   return (
-    <Card className="flex-1 min-w-[400px] max-w-[500px] bg-slate-50/50 flex flex-col h-[calc(100vh-180px)] transition-all duration-300 border-t-4 border-t-slate-200">
+    <Card
+      className={`shrink-0 w-[400px] bg-slate-50/50 flex flex-col h-[calc(100vh-180px)] transition-all duration-300 border-x border-b border-t-4 border-x-slate-200 border-b-slate-200 ${topBorderClass}`}
+    >
       <CardHeader className="pb-3 sticky top-0 z-10 bg-slate-50/95 backdrop-blur rounded-t-lg">
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-sm">
@@ -159,7 +182,6 @@ export function KanbanColumn({
             </Badge>
           </CardTitle>
 
-          {/* BOTÃO MOVIDO PARA O CANTO DIREITO */}
           <Button
             variant="ghost"
             size="sm"
@@ -178,21 +200,23 @@ export function KanbanColumn({
         <div
           ref={setNodeRef}
           data-column-id={id}
-          className={`flex-1 min-h-[70vh] pb-32 rounded-lg transition-all duration-200 ${
-            isDropTarget
-              ? "bg-blue-50/80 border-2 border-dashed border-blue-300 scale-[1.005]"
-              : "border-2 border-transparent"
-          }`}
+          className={`flex-1 min-h-[70vh] pb-32 rounded-xl transition-all duration-300 ${isDropTarget ? "bg-blue-50/50 ring-2 ring-blue-400/20 ring-offset-2 bg-opacity-40" : ""}`}
         >
           <SortableContext
             items={threads.map((t) => t.id)}
             strategy={verticalListSortingStrategy}
           >
             {threads.length === 0 ? (
-              <div className="flex items-center justify-center h-32 text-muted-foreground text-sm border-2 border-dashed border-slate-200 rounded-lg mt-2 text-center px-4">
-                {isDropTarget
-                  ? "✨ Largar aqui"
-                  : "Nenhuma conversa nesta coluna"}
+              <div className="flex flex-col items-center justify-center py-12 px-4 border-2 border-dashed border-slate-200/50 rounded-2xl bg-slate-50/30 mt-2 transition-colors">
+                <div className="bg-white p-3 rounded-full shadow-sm mb-3 ring-4 ring-slate-50">
+                  <Inbox className="h-6 w-6 text-slate-300" />
+                </div>
+                <p className="text-sm font-medium text-slate-400">
+                  Tudo em dia!
+                </p>
+                <p className="text-[11px] text-slate-400/80 text-center">
+                  Nenhuma conversa nesta coluna no momento.
+                </p>
               </div>
             ) : (
               activeGroups.map(([groupName, groupThreads]) => (
@@ -209,8 +233,10 @@ export function KanbanColumn({
                       <SortableThreadCard
                         key={thread.id}
                         thread={thread}
+                        columnId={id}
                         emailsMetadata={emailsMetadata}
                         onUpdateMetadata={onUpdateMetadata}
+                        onThreadUpdated={onThreadUpdated}
                         onEmailSent={onEmailSent}
                       />
                     ))}

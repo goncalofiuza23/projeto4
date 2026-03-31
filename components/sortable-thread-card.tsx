@@ -1,35 +1,47 @@
-"use client"
+"use client";
 
-import { useSortable } from "@dnd-kit/sortable"
-import { CSS } from "@dnd-kit/utilities"
-import { EmailThreadCard } from "./email-thread-card"
-import type { EmailThread } from "@/lib/microsoft-graph"
-import type { EmailMetadata } from "@/lib/supabase"
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { EmailThreadCard } from "./email-thread-card";
+import type { EmailThread } from "@/lib/microsoft-graph";
+import type { EmailMetadata } from "@/lib/supabase";
 
 interface SortableThreadCardProps {
-  thread: EmailThread
-  emailsMetadata: Record<string, EmailMetadata>
-  onUpdateMetadata: (emailId: string, updates: Partial<EmailMetadata>) => void
-  onEmailSent?: () => void
+  thread: EmailThread;
+  columnId: string; // <-- ADICIONADO NA INTERFACE
+  emailsMetadata: Record<string, EmailMetadata>;
+  onUpdateMetadata: (emailId: string, updates: Partial<EmailMetadata>) => void;
+  onThreadUpdated?: (thread: EmailThread) => void;
+  onEmailSent?: () => void;
 }
 
-export function SortableThreadCard({ thread, emailsMetadata, onUpdateMetadata, onEmailSent }: SortableThreadCardProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+export function SortableThreadCard({
+  thread,
+  columnId, // <-- RECEBIDO AQUI
+  emailsMetadata,
+  onUpdateMetadata,
+  onThreadUpdated,
+  onEmailSent,
+}: SortableThreadCardProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: thread.id,
-    data: {
-      type: "thread",
-      thread,
-    },
-  })
+    // ADICIONADO COLUMN ID AQUI EM BAIXO PARA O DRAG SABER ONDE ESTÁ
+    data: { type: "thread", thread, columnId },
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.8 : 1,
-    scale: isDragging ? 1.05 : 1,
+    opacity: isDragging ? 0.4 : 1,
     zIndex: isDragging ? 1000 : 1,
-    cursor: isDragging ? "grabbing" : "grab",
-  }
+  };
 
   return (
     <div
@@ -37,15 +49,15 @@ export function SortableThreadCard({ thread, emailsMetadata, onUpdateMetadata, o
       style={style}
       {...attributes}
       {...listeners}
-      data-thread-id={thread.id}
-      className={`transition-all duration-200 ${isDragging ? "rotate-2 shadow-2xl" : ""}`}
+      className="outline-none"
     >
       <EmailThreadCard
         thread={thread}
         emailsMetadata={emailsMetadata}
         onUpdateMetadata={onUpdateMetadata}
+        onThreadUpdated={onThreadUpdated}
         onEmailSent={onEmailSent}
       />
     </div>
-  )
+  );
 }
