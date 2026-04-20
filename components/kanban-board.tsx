@@ -29,7 +29,8 @@ import {
 } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Database } from "lucide-react";
+import { Database, AlertOctagon, Trash2, Clock } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 const DEFAULT_COLUMNS = [
   {
@@ -57,7 +58,7 @@ export function KanbanBoard() {
   const [supabaseError, setSupabaseError] = useState<string | null>(null);
   const [collapsedColumns, setCollapsedColumns] = useState<string[]>([]);
 
-  // Estado para garantir que não subscrevemos os dados antes do load
+  const [activeView, setActiveView] = useState("kanban");
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   const [filters, setFilters] = useState<EmailFilters>({
@@ -81,7 +82,6 @@ export function KanbanBoard() {
     if (!isSupabaseAvailable()) setSupabaseError("Supabase não configurado.");
   }, []);
 
-  // CARREGAR COLUNAS COLAPSADAS
   useEffect(() => {
     if (!account?.homeAccountId || !isSupabaseAvailable()) {
       setIsInitialLoad(false);
@@ -106,7 +106,6 @@ export function KanbanBoard() {
     loadCollapsedCols();
   }, [account?.homeAccountId]);
 
-  // FUNÇÃO PARA LIDAR COM O CLIQUE E GUARDAR
   const handleToggleCollapse = async (columnId: string) => {
     const newState = collapsedColumns.includes(columnId)
       ? collapsedColumns.filter((i) => i !== columnId)
@@ -173,7 +172,6 @@ export function KanbanBoard() {
         });
         setAvailableTags(Array.from(allTags));
       }
-      toast({ title: "Emails carregados" });
     } catch (e) {
       setError("Erro ao carregar");
     } finally {
@@ -275,7 +273,20 @@ export function KanbanBoard() {
   useEffect(() => {
     let filtered = [...threads];
 
-    // 1. Busca Geral (Texto - Procura no Assunto e Corpo)
+    if (activeView === "kanban") {
+      filtered = filtered.filter((t) => {
+        // --- NOVO: Garante que os e-mails do Arquivo, Eliminados e Spam não aparecem no Kanban ---
+        const isArchivedSpamOrDeleted = t.emails.some((e) =>
+          ["archive", "spam", "deleted"].includes(e.folderType || ""),
+        );
+        if (isArchivedSpamOrDeleted) return false;
+
+        const isOnlyFromMe = t.emails.every((e) => e.isFromMe);
+        const hasColumn = t.emails.some((e) => emailsMetadata[e.id]?.column_id);
+        return !(isOnlyFromMe && !hasColumn);
+      });
+    }
+
     if (filters.search) {
       const s = filters.search.toLowerCase();
       filtered = filtered.filter((t) =>
@@ -287,7 +298,6 @@ export function KanbanBoard() {
       );
     }
 
-    // 2. Remetente
     if (filters.sender) {
       const s = filters.sender.toLowerCase();
       filtered = filtered.filter((t) =>
@@ -299,7 +309,6 @@ export function KanbanBoard() {
       );
     }
 
-    // 3. Tags
     if (filters.tags.length > 0) {
       filtered = filtered.filter((t) =>
         t.emails.some((e) =>
@@ -308,7 +317,6 @@ export function KanbanBoard() {
       );
     }
 
-    // 4. Prioridade
     if (filters.priority.length > 0) {
       filtered = filtered.filter((t) =>
         t.emails.some((e) => {
@@ -318,7 +326,6 @@ export function KanbanBoard() {
       );
     }
 
-    // 5. Anexos
     if (filters.hasAttachments !== null) {
       filtered = filtered.filter((t) => {
         const hasAttach = t.emails.some((e) => e.hasAttachments);
@@ -326,14 +333,12 @@ export function KanbanBoard() {
       });
     }
 
-    // 6. Status de Leitura
     if (filters.isRead !== null) {
       filtered = filtered.filter((t) => {
         return filters.isRead ? !t.hasUnread : t.hasUnread;
       });
     }
 
-    // 7. Período / Datas
     if (filters.dateRange.from || filters.dateRange.to) {
       filtered = filtered.filter((t) => {
         const threadDate = new Date(t.lastActivity).getTime();
@@ -346,7 +351,7 @@ export function KanbanBoard() {
 
         if (filters.dateRange.to) {
           const toDate = new Date(filters.dateRange.to);
-          toDate.setHours(23, 59, 59, 999); // Inclui emails do próprio dia
+          toDate.setHours(23, 59, 59, 999);
           if (threadDate > toDate.getTime()) isValid = false;
         }
 
@@ -355,7 +360,7 @@ export function KanbanBoard() {
     }
 
     setFilteredThreads(filtered);
-  }, [threads, filters, emailsMetadata]);
+  }, [threads, filters, emailsMetadata, activeView]);
 
   useEffect(() => {
     if (accessToken && account && !authLoading) {
@@ -381,6 +386,331 @@ export function KanbanBoard() {
     })),
   ];
 
+  const renderMainContent = () => {
+    if (activeView === "kanban") {
+      return (
+        <DndContext
+          sensors={sensors}
+          onDragStart={(e) =>
+            setActiveThread(threads.find((t) => t.id === e.active.id) || null)
+          }
+          onDragEnd={handleDragEnd}
+        >
+          <div className="w-full overflow-x-auto overflow-y-hidden pb-8 custom-scrollbar">
+            <div className="flex flex-nowrap gap-6 items-start w-max min-w-full">
+              {allColumns.map((column) => (
+                <KanbanColumn
+                  key={column.id}
+                  id={column.id}
+                  title={column.title}
+                  threads={getThreadsByColumn(column.id)}
+                  emailsMetadata={emailsMetadata}
+                  onUpdateMetadata={updateEmailMetadata}
+                  onThreadUpdated={handleThreadUpdated}
+                  color={column.color}
+                  icon={column.icon}
+                  onEmailSent={loadEmails}
+                  isCollapsed={collapsedColumns.includes(column.id)}
+                  onToggleCollapse={() => handleToggleCollapse(column.id)}
+                />
+              ))}
+              <div className="shrink-0 w-4 h-full opacity-0 pointer-events-none" />
+            </div>
+          </div>
+
+          <DragOverlay>
+            {activeThread && (
+              <div className="rotate-3 scale-105 shadow-2xl transition-transform">
+                <EmailThreadCard
+                  thread={activeThread}
+                  emailsMetadata={emailsMetadata}
+                  onUpdateMetadata={updateEmailMetadata}
+                  onEmailSent={loadEmails}
+                />
+              </div>
+            )}
+          </DragOverlay>
+        </DndContext>
+      );
+    }
+
+    if (activeView.startsWith("col_")) {
+      const colId = activeView.replace("col_", "");
+      const column = allColumns.find((c) => c.id === colId);
+      const colThreads = getThreadsByColumn(colId);
+
+      return (
+        <div className="max-w-3xl mx-auto py-4">
+          <div className="flex items-center gap-4 mb-8 pb-6 border-b border-slate-200/50">
+            <div className="h-14 w-14 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-2xl">
+              {column?.icon || "📁"}
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
+                {column?.title || "Coluna Desconhecida"}
+              </h2>
+            </div>
+            <Badge
+              variant="secondary"
+              className="ml-auto text-sm px-3 py-1 bg-white border border-slate-200 shadow-sm"
+            >
+              {colThreads.length} emails
+            </Badge>
+          </div>
+
+          <div className="space-y-4">
+            {colThreads.length === 0 ? (
+              <div className="text-center py-16 text-slate-400 bg-white/50 rounded-3xl border border-dashed border-slate-200 shadow-sm">
+                Nenhum e-mail nesta lista. Tudo limpo!
+              </div>
+            ) : (
+              colThreads.map((thread) => (
+                <div
+                  key={thread.id}
+                  className="animate-in fade-in slide-in-from-bottom-2 duration-300"
+                >
+                  <EmailThreadCard
+                    thread={thread}
+                    emailsMetadata={emailsMetadata}
+                    onUpdateMetadata={updateEmailMetadata}
+                    onThreadUpdated={handleThreadUpdated}
+                    onEmailSent={loadEmails}
+                  />
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    if (activeView === "archived") {
+      const archivedThreads = threads.filter((t) =>
+        t.emails.some((e) => e.folderType === "archive"),
+      );
+
+      return (
+        <div className="max-w-3xl mx-auto py-4">
+          <div className="flex items-center gap-4 mb-8 pb-6 border-b border-slate-200/50">
+            <div className="h-14 w-14 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-2xl">
+              📦
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
+                Arquivo Oficial
+              </h2>
+              <p className="text-sm text-slate-500 font-medium">
+                Estes e-mails estão na sua pasta de Arquivo do Outlook.
+              </p>
+            </div>
+            <Badge
+              variant="secondary"
+              className="ml-auto text-sm px-3 py-1 bg-white border border-slate-200 shadow-sm"
+            >
+              {archivedThreads.length} emails
+            </Badge>
+          </div>
+
+          <div className="space-y-4">
+            {archivedThreads.length === 0 ? (
+              <div className="text-center py-16 text-slate-400 bg-white/50 rounded-3xl border border-dashed border-slate-200 shadow-sm">
+                Nenhum e-mail no arquivo do Outlook.
+              </div>
+            ) : (
+              archivedThreads.map((thread) => (
+                <div
+                  key={thread.id}
+                  className="animate-in fade-in slide-in-from-bottom-2 duration-300"
+                >
+                  <EmailThreadCard
+                    thread={thread}
+                    emailsMetadata={emailsMetadata}
+                    onUpdateMetadata={updateEmailMetadata}
+                    onThreadUpdated={handleThreadUpdated}
+                    onEmailSent={loadEmails}
+                    isArchivedView={true}
+                  />
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    if (activeView === "sent") {
+      const sentThreads = threads.filter((t) =>
+        t.emails.some((e) => e.folderType === "sent"),
+      );
+
+      return (
+        <div className="max-w-3xl mx-auto py-4">
+          <div className="flex items-center gap-4 mb-8 pb-6 border-b border-slate-200/50">
+            <div className="h-14 w-14 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-2xl">
+              📤
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
+                Enviados
+              </h2>
+              <p className="text-sm text-slate-500 font-medium">
+                E-mails que enviou com sucesso.
+              </p>
+            </div>
+            <Badge
+              variant="secondary"
+              className="ml-auto text-sm px-3 py-1 bg-white border border-slate-200 shadow-sm"
+            >
+              {sentThreads.length} conversas
+            </Badge>
+          </div>
+
+          <div className="space-y-4">
+            {sentThreads.length === 0 ? (
+              <div className="text-center py-16 text-slate-400 bg-white/50 rounded-3xl border border-dashed border-slate-200 shadow-sm">
+                Ainda não enviou nenhuma mensagem.
+              </div>
+            ) : (
+              sentThreads.map((thread) => (
+                <div
+                  key={thread.id}
+                  className="animate-in fade-in slide-in-from-bottom-2 duration-300"
+                >
+                  <EmailThreadCard
+                    thread={thread}
+                    emailsMetadata={emailsMetadata}
+                    onUpdateMetadata={updateEmailMetadata}
+                    onThreadUpdated={handleThreadUpdated}
+                    onEmailSent={loadEmails}
+                  />
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // --- NOVA VISTA: ELIMINADOS ---
+    if (activeView === "deleted") {
+      const deletedThreads = threads.filter((t) =>
+        t.emails.some((e) => e.folderType === "deleted"),
+      );
+
+      return (
+        <div className="max-w-3xl mx-auto py-4">
+          <div className="flex items-center gap-4 mb-8 pb-6 border-b border-slate-200/50">
+            <div className="h-14 w-14 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-2xl text-red-500">
+              <Trash2 className="h-6 w-6" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
+                Eliminados
+              </h2>
+              <p className="text-sm text-slate-500 font-medium">
+                Os seus itens eliminados.
+              </p>
+            </div>
+            <Badge
+              variant="secondary"
+              className="ml-auto text-sm px-3 py-1 bg-white border border-slate-200 shadow-sm text-red-600"
+            >
+              {deletedThreads.length} emails
+            </Badge>
+          </div>
+
+          <div className="space-y-4">
+            {deletedThreads.length === 0 ? (
+              <div className="text-center py-16 text-slate-400 bg-white/50 rounded-3xl border border-dashed border-slate-200 shadow-sm">
+                O lixo está limpo.
+              </div>
+            ) : (
+              deletedThreads.map((thread) => (
+                <div
+                  key={thread.id}
+                  className="animate-in fade-in slide-in-from-bottom-2 duration-300"
+                >
+                  <EmailThreadCard
+                    thread={thread}
+                    emailsMetadata={emailsMetadata}
+                    onUpdateMetadata={updateEmailMetadata}
+                    onThreadUpdated={handleThreadUpdated}
+                    onEmailSent={loadEmails}
+                    isDeletedView={true}
+                  />
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // --- NOVA VISTA: SPAM ---
+    if (activeView === "spam") {
+      const spamThreads = threads.filter((t) =>
+        t.emails.some((e) => e.folderType === "spam"),
+      );
+
+      return (
+        <div className="max-w-3xl mx-auto py-4">
+          <div className="flex items-center gap-4 mb-8 pb-6 border-b border-slate-200/50">
+            <div className="h-14 w-14 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-2xl text-amber-500">
+              <AlertOctagon className="h-6 w-6" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
+                Lixo Eletrónico
+              </h2>
+              <p className="text-sm text-slate-500 font-medium">
+                E-mails marcados como Spam.
+              </p>
+            </div>
+            <Badge
+              variant="secondary"
+              className="ml-auto text-sm px-3 py-1 bg-white border border-slate-200 shadow-sm text-amber-600"
+            >
+              {spamThreads.length} emails
+            </Badge>
+          </div>
+
+          <div className="space-y-4">
+            {spamThreads.length === 0 ? (
+              <div className="text-center py-16 text-slate-400 bg-white/50 rounded-3xl border border-dashed border-slate-200 shadow-sm">
+                Não tem mensagens de spam.
+              </div>
+            ) : (
+              spamThreads.map((thread) => (
+                <div
+                  key={thread.id}
+                  className="animate-in fade-in slide-in-from-bottom-2 duration-300"
+                >
+                  <EmailThreadCard
+                    thread={thread}
+                    emailsMetadata={emailsMetadata}
+                    onUpdateMetadata={updateEmailMetadata}
+                    onThreadUpdated={handleThreadUpdated}
+                    onEmailSent={loadEmails}
+                    isSpamView={true}
+                  />
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-col items-center justify-center h-[70vh] text-slate-400 space-y-4">
+        <Clock className="h-12 w-12 text-slate-300" />
+        <p className="font-medium text-lg">
+          Vista <b>{activeView}</b> em construção...
+        </p>
+      </div>
+    );
+  };
+
   return (
     <DashboardLayout
       isLoading={isLoading}
@@ -389,6 +719,8 @@ export function KanbanBoard() {
       onToggleFilters={() => setIsFiltersVisible(!isFiltersVisible)}
       customColumns={customColumns}
       onColumnsChange={loadCustomColumns}
+      activeView={activeView}
+      onViewChange={setActiveView}
     >
       {isFiltersVisible && (
         <FiltersPanel
@@ -401,7 +733,7 @@ export function KanbanBoard() {
       )}
 
       {supabaseError && (
-        <Alert className="bg-white/90 border-amber-200 rounded-2xl mb-6">
+        <Alert className="bg-white/90 border-amber-200 rounded-2xl mb-6 shadow-sm">
           <Database className="h-4 w-4 text-amber-600" />
           <AlertDescription className="text-amber-900 font-medium">
             {supabaseError}
@@ -409,48 +741,7 @@ export function KanbanBoard() {
         </Alert>
       )}
 
-      <DndContext
-        sensors={sensors}
-        onDragStart={(e) =>
-          setActiveThread(threads.find((t) => t.id === e.active.id) || null)
-        }
-        onDragEnd={handleDragEnd}
-      >
-        <div className="w-full overflow-x-auto overflow-y-hidden pb-8 custom-scrollbar">
-          <div className="flex flex-nowrap gap-6 items-start w-max min-w-full">
-            {allColumns.map((column) => (
-              <KanbanColumn
-                key={column.id}
-                id={column.id}
-                title={column.title}
-                threads={getThreadsByColumn(column.id)}
-                emailsMetadata={emailsMetadata}
-                onUpdateMetadata={updateEmailMetadata}
-                onThreadUpdated={handleThreadUpdated}
-                color={column.color}
-                icon={column.icon}
-                onEmailSent={loadEmails}
-                isCollapsed={collapsedColumns.includes(column.id)}
-                onToggleCollapse={() => handleToggleCollapse(column.id)}
-              />
-            ))}
-            <div className="shrink-0 w-4 h-full opacity-0 pointer-events-none" />
-          </div>
-        </div>
-
-        <DragOverlay>
-          {activeThread && (
-            <div className="rotate-3 scale-105 shadow-2xl transition-transform">
-              <EmailThreadCard
-                thread={activeThread}
-                emailsMetadata={emailsMetadata}
-                onUpdateMetadata={updateEmailMetadata}
-                onEmailSent={loadEmails}
-              />
-            </div>
-          )}
-        </DragOverlay>
-      </DndContext>
+      {renderMainContent()}
     </DashboardLayout>
   );
 }

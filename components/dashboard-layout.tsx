@@ -7,19 +7,18 @@ import {
   RefreshCw,
   Loader2,
   Filter,
-  Palette,
   LayoutGrid,
   Plus,
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
+  Archive,
+  Trash2,
+  Clock,
+  AlertOctagon,
+  Settings,
+  Send,
 } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from "@/components/ui/select";
 import { ColumnManager } from "./column-manager";
 import { EmailComposer } from "./email-composer";
 import { UserAvatar } from "./user-avatar";
@@ -30,6 +29,7 @@ import {
   isSupabaseAvailable,
   safeSupabaseOperation,
 } from "@/lib/supabase";
+import { SettingsModal } from "./settings-modal";
 
 export const BACKGROUNDS = [
   { id: "slate", name: "Padrão", class: "bg-[#f8fafc]", type: "color" },
@@ -62,6 +62,8 @@ interface DashboardLayoutProps {
   onToggleFilters: () => void;
   customColumns: any[];
   onColumnsChange: () => void;
+  activeView: string;
+  onViewChange: (view: string) => void;
 }
 
 export function DashboardLayout({
@@ -72,17 +74,18 @@ export function DashboardLayout({
   onToggleFilters,
   customColumns,
   onColumnsChange,
+  activeView,
+  onViewChange,
 }: DashboardLayoutProps) {
   const { account, accessToken, logout } = useAuth();
   const [currentBg, setCurrentBg] = useState(BACKGROUNDS[0]);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-
-  // Estado para evitar guardar preferências enquanto elas ainda não carregaram da DB
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  // Carregar foto
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+
   useEffect(() => {
     if (!accessToken || !account?.username) return;
     const fetchPhoto = async () => {
@@ -95,7 +98,6 @@ export function DashboardLayout({
     fetchPhoto();
   }, [accessToken, account?.username]);
 
-  // CARREGAR PREFERÊNCIAS
   useEffect(() => {
     if (!account?.homeAccountId || !isSupabaseAvailable()) {
       setIsInitialLoad(false);
@@ -104,7 +106,7 @@ export function DashboardLayout({
 
     const loadPrefs = async () => {
       await safeSupabaseOperation(async () => {
-        const { data, error } = await supabase!
+        const { data } = await supabase!
           .from("user_preferences")
           .select("*")
           .eq("user_id", account.homeAccountId)
@@ -122,7 +124,6 @@ export function DashboardLayout({
     loadPrefs();
   }, [account?.homeAccountId]);
 
-  // FUNÇÃO PARA GUARDAR PREFERÊNCIAS NA BD
   const savePreference = async (updates: any) => {
     if (!account?.homeAccountId || isInitialLoad || !isSupabaseAvailable())
       return;
@@ -163,15 +164,55 @@ export function DashboardLayout({
     }
   };
 
+  const renderMenuItem = (
+    id: string,
+    IconOrEmoji: any,
+    label: string,
+    isEmoji: boolean = false,
+    onClick?: () => void,
+  ) => {
+    const isActive = activeView === id;
+    return (
+      <Button
+        key={id}
+        variant="ghost"
+        onClick={() => {
+          onViewChange(id);
+          if (onClick) onClick();
+        }}
+        title={label}
+        className={`w-full h-10 rounded-xl transition-all ${
+          isActive
+            ? "bg-blue-50 text-blue-700 font-semibold shadow-sm border border-blue-100/50"
+            : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+        } ${isSidebarCollapsed ? "justify-center px-0" : "justify-start gap-3 px-3"}`}
+      >
+        {isEmoji ? (
+          <span
+            className={`h-4 w-4 shrink-0 flex items-center justify-center text-[14px] leading-none ${isActive ? "opacity-100" : "opacity-70 grayscale-[50%]"}`}
+          >
+            {IconOrEmoji}
+          </span>
+        ) : (
+          <IconOrEmoji
+            className={`h-4 w-4 shrink-0 ${isActive ? "text-blue-600" : "text-slate-400"}`}
+          />
+        )}
+        {!isSidebarCollapsed && (
+          <span className="text-xs truncate">{label}</span>
+        )}
+      </Button>
+    );
+  };
+
   return (
     <div className="flex h-screen w-full overflow-hidden m-0 p-0">
-      {/* SIDEBAR COM LARGURA DINÂMICA */}
+      {/* SIDEBAR */}
       <aside
         className={`bg-white border-r border-slate-200 flex flex-col z-20 shadow-xl transition-all duration-300 ease-in-out ${
           isSidebarCollapsed ? "w-20" : "w-72"
         }`}
       >
-        {/* CABEÇALHO DA SIDEBAR */}
         <div
           className={`p-4 border-b border-slate-50 bg-slate-50/50 flex items-center ${isSidebarCollapsed ? "justify-center" : "justify-between"}`}
         >
@@ -206,10 +247,8 @@ export function DashboardLayout({
           </Button>
         </div>
 
-        {/* CORPO DA SIDEBAR */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-8 custom-scrollbar">
-          {/* Botão Novo Email (MUDADO PARA AZUL LIMPO) */}
-          <div className="space-y-1.5 px-1">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden py-5 space-y-6 custom-scrollbar">
+          <div className="px-3">
             <Button
               onClick={() => setIsComposerOpen(true)}
               title="Novo E-mail"
@@ -226,183 +265,117 @@ export function DashboardLayout({
             </Button>
           </div>
 
-          {/* Comandos */}
-          <div className="space-y-1.5 px-1">
+          <div className="space-y-0.5 px-2">
             {!isSidebarCollapsed && (
-              <p className="text-[10px] font-bold text-slate-400 uppercase px-1 mb-2 truncate">
-                Comandos
+              <p className="text-[10px] font-bold text-slate-400 uppercase px-2 mb-2 truncate">
+                Caixa de Entrada
               </p>
             )}
+            {renderMenuItem("kanban", LayoutDashboard, "O meu Kanban")}
+            {renderMenuItem("sent", Send, "Enviados")}
+            {/* {renderMenuItem("snoozed", Clock, "Adiados (Snoozed)")} */}
+            {renderMenuItem("archived", Archive, "Arquivados")}
+            {renderMenuItem("spam", AlertOctagon, "Spam")}
+            {renderMenuItem("deleted", Trash2, "Eliminados")}
+          </div>
 
-            {/* Botão Atualizar (MUDADO PARA OUTLINE SUAVE) */}
+          <div className="space-y-0.5 px-2">
+            {!isSidebarCollapsed && (
+              <p className="text-[10px] font-bold text-slate-400 uppercase px-2 mb-2 truncate">
+                As Minhas Colunas
+              </p>
+            )}
+            <div className="max-h-[128px] overflow-y-auto custom-scrollbar pr-1 space-y-0.5">
+              {renderMenuItem("col_inbox", "📥", "Caixa de Entrada", true)}
+              {customColumns.map((col) =>
+                renderMenuItem(
+                  `col_${col.id}`,
+                  col.icon || "📁",
+                  col.name,
+                  true,
+                ),
+              )}
+            </div>
+
+            {isSupabaseAvailable() && (
+              <div
+                className={`pt-2 ${isSidebarCollapsed ? "flex justify-center" : ""}`}
+              >
+                <div
+                  title="Gerir Colunas"
+                  className={
+                    isSidebarCollapsed
+                      ? "[&_button]:w-10 [&_button]:h-10 [&_button]:p-0 [&_button]:flex [&_button]:justify-center [&_button]:items-center [&_button]:bg-transparent [&_button]:border-none [&_button]:shadow-none [&_button]:text-[0px] [&_button]:text-transparent [&_button_svg]:text-slate-400 hover:[&_button]:text-blue-600 hover:[&_button]:bg-slate-100 [&_button_span]:hidden [&_button_svg]:!m-0 [&_button_svg]:w-5 [&_button_svg]:h-5 transition-colors rounded-xl"
+                      : "[&_button]:w-full [&_button]:h-8 [&_button]:justify-start [&_button]:gap-3 [&_button]:px-3 [&_button]:text-xs [&_button]:font-medium [&_button]:text-slate-500 [&_button]:bg-transparent hover:[&_button]:bg-slate-100 hover:[&_button]:text-slate-900 transition-colors rounded-lg [&_button_svg]:h-4 [&_button_svg]:w-4"
+                  }
+                >
+                  <ColumnManager
+                    columns={customColumns}
+                    onColumnsChange={onColumnsChange}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-0.5 px-2">
+            {!isSidebarCollapsed && (
+              <p className="text-[10px] font-bold text-slate-400 uppercase px-2 mb-2 truncate">
+                Ferramentas
+              </p>
+            )}
             <Button
+              variant="ghost"
               onClick={onRefresh}
               disabled={isLoading}
               title="Atualizar"
-              className={`w-full border border-slate-200 bg-white text-slate-600 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 h-11 rounded-xl shadow-sm transition-all active:scale-95 ${
+              className={`w-full h-10 rounded-xl transition-all text-slate-600 hover:bg-slate-50 hover:text-slate-900 ${
                 isSidebarCollapsed
                   ? "justify-center px-0"
-                  : "justify-start gap-3 px-4"
+                  : "justify-start gap-3 px-3"
               }`}
             >
               {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                <Loader2 className="h-4 w-4 animate-spin shrink-0 text-slate-400" />
               ) : (
-                <RefreshCw className="h-4 w-4 shrink-0" />
+                <RefreshCw className="h-4 w-4 shrink-0 text-slate-400" />
               )}
               {!isSidebarCollapsed && (
-                <span className="font-semibold text-xs truncate">
-                  Atualizar
-                </span>
+                <span className="text-xs truncate">Atualizar Emails</span>
               )}
             </Button>
 
-            {/* Botão Filtros */}
             <Button
               variant="ghost"
               onClick={onToggleFilters}
               title="Filtros"
-              className={`w-full h-11 rounded-xl transition-all ${
+              className={`w-full h-10 rounded-xl transition-all ${
                 isFiltersVisible
-                  ? "bg-blue-50 text-blue-600"
-                  : "text-slate-600 hover:bg-slate-50"
-              } ${isSidebarCollapsed ? "justify-center px-0" : "justify-start gap-3 px-4"}`}
+                  ? "bg-blue-50 text-blue-700 font-semibold"
+                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+              } ${isSidebarCollapsed ? "justify-center px-0" : "justify-start gap-3 px-3"}`}
             >
-              <Filter className="h-4 w-4 shrink-0" />
+              <Filter
+                className={`h-4 w-4 shrink-0 ${isFiltersVisible ? "text-blue-600" : "text-slate-400"}`}
+              />
               {!isSidebarCollapsed && (
-                <span className="font-semibold text-xs truncate">
+                <span className="text-xs truncate">
                   {isFiltersVisible ? "Ocultar Filtros" : "Mostrar Filtros"}
                 </span>
               )}
             </Button>
           </div>
-
-          {/* Personalização */}
-          <div className="space-y-3 px-1">
-            {!isSidebarCollapsed && (
-              <p className="text-[10px] font-bold text-slate-400 uppercase px-1 truncate">
-                Personalização
-              </p>
-            )}
-            <div
-              className={
-                isSidebarCollapsed
-                  ? "flex flex-col items-center gap-4 pt-4 border-t border-slate-100"
-                  : "bg-slate-50 rounded-2xl p-3 border border-slate-100 space-y-4"
-              }
-            >
-              {/* Opção: Plano de Fundo */}
-              <div
-                className={
-                  isSidebarCollapsed
-                    ? "flex justify-center w-full"
-                    : "space-y-2 w-full"
-                }
-              >
-                {!isSidebarCollapsed && (
-                  <div className="flex items-center gap-2 px-1 text-slate-500">
-                    <Palette className="h-3.5 w-3.5 shrink-0" />
-                    <span className="text-[11px] font-bold uppercase truncate">
-                      Plano de Fundo
-                    </span>
-                  </div>
-                )}
-                <Select onValueChange={handleBgChange} value={currentBg.id}>
-                  {isSidebarCollapsed ? (
-                    <SelectTrigger
-                      title="Mudar Plano de Fundo"
-                      className="mx-auto w-10 h-10 p-0 flex justify-center items-center bg-transparent border-none shadow-none text-slate-400 hover:text-blue-600 hover:bg-slate-100 transition-colors [&>svg:last-child]:hidden [&>span:last-child]:hidden"
-                    >
-                      <Palette className="h-5 w-5 shrink-0" />
-                    </SelectTrigger>
-                  ) : (
-                    <SelectTrigger className="w-full h-10 bg-white border-slate-200 rounded-xl text-xs font-medium">
-                      <div className="flex items-center gap-2 truncate">
-                        <div
-                          className={`w-3 h-3 rounded-full shrink-0 ${currentBg.type === "color" ? currentBg.class : "bg-slate-300"}`}
-                          style={
-                            currentBg.type === "image"
-                              ? {
-                                  backgroundImage: `url(${currentBg.url})`,
-                                  backgroundSize: "cover",
-                                }
-                              : {}
-                          }
-                        />
-                        <span className="truncate">{currentBg.name}</span>
-                      </div>
-                    </SelectTrigger>
-                  )}
-                  <SelectContent>
-                    {BACKGROUNDS.map((bg) => (
-                      <SelectItem key={bg.id} value={bg.id} className="text-xs">
-                        <div className="flex items-center gap-2">
-                          <div
-                            className={`w-3 h-3 rounded-full shrink-0 ${bg.type === "color" ? bg.class : "bg-slate-300"}`}
-                            style={
-                              bg.type === "image"
-                                ? {
-                                    backgroundImage: `url(${bg.url})`,
-                                    backgroundSize: "cover",
-                                  }
-                                : {}
-                            }
-                          />
-                          {bg.name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {!isSidebarCollapsed && (
-                <div className="h-px bg-slate-200/60 w-full" />
-              )}
-
-              {/* Opção: Estrutura (Gerir Colunas) */}
-              <div
-                className={
-                  isSidebarCollapsed
-                    ? "flex justify-center w-full"
-                    : "space-y-2 w-full"
-                }
-              >
-                {!isSidebarCollapsed && (
-                  <div className="flex items-center gap-2 px-1 text-slate-500">
-                    <LayoutGrid className="h-3.5 w-3.5 shrink-0" />
-                    <span className="text-[11px] font-bold uppercase truncate">
-                      Estrutura
-                    </span>
-                  </div>
-                )}
-                {isSupabaseAvailable() && (
-                  <div
-                    title="Gerir Colunas"
-                    className={
-                      isSidebarCollapsed
-                        ? "[&_button]:w-10 [&_button]:h-10 [&_button]:p-0 [&_button]:flex [&_button]:justify-center [&_button]:items-center [&_button]:bg-transparent [&_button]:border-none [&_button]:shadow-none [&_button]:text-[0px] [&_button]:text-transparent [&_button_svg]:text-slate-400 hover:[&_button]:text-blue-600 hover:[&_button]:bg-slate-100 [&_button_span]:hidden [&_button_svg]:!m-0 [&_button_svg]:w-5 [&_button_svg]:h-5 transition-colors rounded-xl"
-                        : ""
-                    }
-                  >
-                    <ColumnManager
-                      columns={customColumns}
-                      onColumnsChange={onColumnsChange}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* RODAPÉ: PERFIL E SAIR */}
-        <div className="mt-auto p-4 border-t border-slate-100 bg-white">
+        <div className="mt-auto p-4 border-t border-slate-100 bg-white shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.05)]">
           <div
             className={`flex ${isSidebarCollapsed ? "flex-col py-3" : "items-center justify-between p-2"} gap-3 bg-slate-50 rounded-2xl border border-slate-100`}
           >
             <div
-              className={`flex items-center gap-2 ${isSidebarCollapsed ? "justify-center" : "min-w-0"}`}
+              className={`flex items-center gap-2 ${isSidebarCollapsed ? "justify-center" : "min-w-0"} flex-1 cursor-pointer hover:opacity-80 transition-opacity`}
+              onClick={() => setIsSettingsModalOpen(true)}
+              title="Abrir Definições"
             >
               <UserAvatar
                 name={account?.name}
@@ -415,15 +388,19 @@ export function DashboardLayout({
                   <p className="text-[10px] font-bold text-slate-900 truncate leading-tight">
                     {account?.name || "Utilizador"}
                   </p>
+                  <p className="text-[9px] text-slate-500 font-medium truncate flex items-center gap-1 mt-0.5">
+                    <Settings className="h-3 w-3" /> Definições
+                  </p>
                 </div>
               )}
             </div>
+
             <Button
               variant="ghost"
               size="icon"
               onClick={handleLogout}
               title="Terminar Sessão"
-              className={`h-8 w-8 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors ${isSidebarCollapsed ? "mx-auto" : ""}`}
+              className={`h-8 w-8 shrink-0 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors ${isSidebarCollapsed ? "mx-auto" : ""}`}
             >
               <LogOut className="h-4 w-4" />
             </Button>
@@ -431,7 +408,16 @@ export function DashboardLayout({
         </div>
       </aside>
 
-      {/* MODAL DO NOVO EMAIL */}
+      {/* COMPONENTE DO MODAL DE DEFINIÇÕES */}
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={setIsSettingsModalOpen}
+        account={account}
+        avatarUrl={avatarUrl}
+        currentBgId={currentBg.id}
+        onBgChange={handleBgChange}
+      />
+
       <EmailComposer
         isOpen={isComposerOpen}
         onClose={() => setIsComposerOpen(false)}
@@ -439,7 +425,6 @@ export function DashboardLayout({
         onEmailSent={handleEmailSent}
       />
 
-      {/* CONTEÚDO PRINCIPAL (ESTICA TUDO) */}
       <main
         className={`flex-1 flex flex-col transition-all duration-700 ease-in-out relative h-full min-w-0 ${currentBg.type === "color" ? currentBg.class : ""}`}
         style={

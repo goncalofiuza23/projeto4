@@ -82,9 +82,9 @@ export interface Email {
   conversationId?: string;
   conversationIndex?: string;
   internetMessageId?: string;
-  // Propriedades para threading
   isFromMe?: boolean;
   threadEmails?: Email[];
+  folderType?: "inbox" | "sent" | "archive" | "deleted" | "spam"; // NOVO: Suporta deleted e spam
 }
 
 export interface EmailThread {
@@ -158,10 +158,8 @@ export class GraphService {
       } catch {
         errorMessage = errorText || errorMessage;
       }
-
       throw new Error(errorMessage);
     }
-
     return response;
   }
 
@@ -181,15 +179,11 @@ export class GraphService {
     }
   }
 
-  // --- NOVA FUNÇÃO: Ir buscar a foto de perfil do remetente ---
-  // --- NOVA FUNÇÃO: Ir buscar a foto de perfil do remetente (VERSÃO INTELIGENTE) ---
   async getProfilePhoto(email: string): Promise<string | null> {
     try {
-      // 1. Descobre se o e-mail que estamos a procurar é o teu próprio e-mail
       const myEmail = await this.getUserEmail();
       const isMe = email.toLowerCase() === myEmail.toLowerCase();
 
-      // 2. Se fores tu, usa a rota especial "/me". Se for outro colega, usa a rota "/users"
       const endpoint = isMe
         ? `https://graph.microsoft.com/v1.0/me/photo/$value`
         : `https://graph.microsoft.com/v1.0/users/${email}/photo/$value`;
@@ -198,7 +192,6 @@ export class GraphService {
       const blob = await response.blob();
       return URL.createObjectURL(blob);
     } catch (error) {
-      // 3. Vamos imprimir o erro na consola para sabermos exatamente o que a Microsoft nos está a dizer!
       console.error(`❌ Erro ao buscar foto para ${email}:`, error);
       return null;
     }
@@ -208,15 +201,14 @@ export class GraphService {
     const response = await this.makeRequest(
       `https://graph.microsoft.com/v1.0/me/messages?$top=${top}&$orderby=receivedDateTime desc&$select=id,subject,bodyPreview,body,from,receivedDateTime,sentDateTime,isRead,importance,hasAttachments,toRecipients,ccRecipients,bccRecipients,replyTo,parentFolderId,conversationId,conversationIndex,internetMessageId`,
     );
-
     const data = await response.json();
     const userEmail = await this.getUserEmail();
-
     return data.value.map((email: any) => ({
       ...email,
       isFromMe:
         email.from?.emailAddress?.address?.toLowerCase() ===
         userEmail.toLowerCase(),
+      folderType: "inbox",
     }));
   }
 
@@ -224,25 +216,102 @@ export class GraphService {
     const response = await this.makeRequest(
       `https://graph.microsoft.com/v1.0/me/mailFolders/sentitems/messages?$top=${top}&$orderby=sentDateTime desc&$select=id,subject,bodyPreview,body,from,sentDateTime,receivedDateTime,isRead,importance,hasAttachments,toRecipients,ccRecipients,bccRecipients,replyTo,parentFolderId,conversationId,conversationIndex,internetMessageId`,
     );
-
     const data = await response.json();
     const userEmail = await this.getUserEmail();
-
     return data.value.map((email: any) => ({
       ...email,
       receivedDateTime: email.sentDateTime || email.receivedDateTime,
       isFromMe: true,
+      folderType: "sent",
     }));
+  }
+
+  async getArchivedEmails(top = 50): Promise<Email[]> {
+    try {
+      const response = await this.makeRequest(
+        `https://graph.microsoft.com/v1.0/me/mailFolders/archive/messages?$top=${top}&$orderby=receivedDateTime desc&$select=id,subject,bodyPreview,body,from,receivedDateTime,sentDateTime,isRead,importance,hasAttachments,toRecipients,ccRecipients,bccRecipients,replyTo,parentFolderId,conversationId,conversationIndex,internetMessageId`,
+      );
+      const data = await response.json();
+      const userEmail = await this.getUserEmail();
+      return data.value.map((email: any) => ({
+        ...email,
+        isFromMe:
+          email.from?.emailAddress?.address?.toLowerCase() ===
+          userEmail.toLowerCase(),
+        folderType: "archive",
+      }));
+    } catch (error) {
+      console.error("Erro ao buscar arquivo:", error);
+      return [];
+    }
+  }
+
+  // --- NOVA FUNÇÃO: Ler pasta de Eliminados ---
+  async getDeletedEmails(top = 50): Promise<Email[]> {
+    try {
+      const response = await this.makeRequest(
+        `https://graph.microsoft.com/v1.0/me/mailFolders/deleteditems/messages?$top=${top}&$orderby=receivedDateTime desc&$select=id,subject,bodyPreview,body,from,receivedDateTime,sentDateTime,isRead,importance,hasAttachments,toRecipients,ccRecipients,bccRecipients,replyTo,parentFolderId,conversationId,conversationIndex,internetMessageId`,
+      );
+      const data = await response.json();
+      const userEmail = await this.getUserEmail();
+      return data.value.map((email: any) => ({
+        ...email,
+        isFromMe:
+          email.from?.emailAddress?.address?.toLowerCase() ===
+          userEmail.toLowerCase(),
+        folderType: "deleted",
+      }));
+    } catch (error) {
+      console.error("Erro ao buscar eliminados:", error);
+      return [];
+    }
+  }
+
+  // --- NOVA FUNÇÃO: Ler pasta de Spam ---
+  async getSpamEmails(top = 50): Promise<Email[]> {
+    try {
+      const response = await this.makeRequest(
+        `https://graph.microsoft.com/v1.0/me/mailFolders/junkemail/messages?$top=${top}&$orderby=receivedDateTime desc&$select=id,subject,bodyPreview,body,from,receivedDateTime,sentDateTime,isRead,importance,hasAttachments,toRecipients,ccRecipients,bccRecipients,replyTo,parentFolderId,conversationId,conversationIndex,internetMessageId`,
+      );
+      const data = await response.json();
+      const userEmail = await this.getUserEmail();
+      return data.value.map((email: any) => ({
+        ...email,
+        isFromMe:
+          email.from?.emailAddress?.address?.toLowerCase() ===
+          userEmail.toLowerCase(),
+        folderType: "spam",
+      }));
+    } catch (error) {
+      console.error("Erro ao buscar spam:", error);
+      return [];
+    }
   }
 
   async getAllEmails(top = 50): Promise<Email[]> {
     try {
-      const [inboxEmails, sentEmails] = await Promise.all([
+      // Vai buscar a todas as 5 pastas
+      const [
+        inboxEmails,
+        sentEmails,
+        archiveEmails,
+        deletedEmails,
+        spamEmails,
+      ] = await Promise.all([
         this.getEmails(top),
         this.getSentEmails(top),
+        this.getArchivedEmails(top),
+        this.getDeletedEmails(top),
+        this.getSpamEmails(top),
       ]);
 
-      const allEmails = [...inboxEmails, ...sentEmails];
+      const allEmails = [
+        ...inboxEmails,
+        ...sentEmails,
+        ...archiveEmails,
+        ...deletedEmails,
+        ...spamEmails,
+      ];
       return allEmails.sort(
         (a, b) =>
           new Date(b.receivedDateTime).getTime() -
@@ -254,12 +323,10 @@ export class GraphService {
     }
   }
 
-  // Nova função para agrupar emails em threads
   groupEmailsIntoThreads(emails: Email[]): EmailThread[] {
     const threadsMap = new Map<string, EmailThread>();
 
     emails.forEach((email) => {
-      // Usar conversationId como chave principal, fallback para assunto normalizado
       const threadKey =
         email.conversationId || this.normalizeSubject(email.subject || "");
 
@@ -278,7 +345,6 @@ export class GraphService {
       const thread = threadsMap.get(threadKey)!;
       thread.emails.push(email);
 
-      // Atualizar participantes
       const fromEmail = email.from?.emailAddress?.address;
       if (fromEmail && !thread.participants.includes(fromEmail)) {
         thread.participants.push(fromEmail);
@@ -291,18 +357,15 @@ export class GraphService {
         }
       });
 
-      // Atualizar última atividade
       if (new Date(email.receivedDateTime) > new Date(thread.lastActivity)) {
         thread.lastActivity = email.receivedDateTime;
       }
 
-      // Verificar se há emails não lidos
       if (!email.isRead) {
         thread.hasUnread = true;
       }
     });
 
-    // Ordenar emails dentro de cada thread e finalizar threads
     const threads = Array.from(threadsMap.values()).map((thread) => {
       thread.emails.sort(
         (a, b) =>
@@ -313,14 +376,12 @@ export class GraphService {
       return thread;
     });
 
-    // Ordenar threads por última atividade
     return threads.sort(
       (a, b) =>
         new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime(),
     );
   }
 
-  // Função para normalizar assunto (remover Re:, Fwd:, etc.)
   private normalizeSubject(subject: string): string {
     return subject
       .replace(/^(Re:|RE:|Fwd:|FWD:|Fw:|FW:)\s*/gi, "")
@@ -328,7 +389,6 @@ export class GraphService {
       .toLowerCase();
   }
 
-  // Função para obter assunto limpo para exibição
   private getCleanSubject(subject: string): string {
     return (
       subject.replace(/^(Re:|RE:|Fwd:|FWD:|Fw:|FW:)\s*/gi, "").trim() ||
@@ -370,9 +430,7 @@ export class GraphService {
       `https://graph.microsoft.com/v1.0/me/messages/${emailId}/reply`,
       {
         method: "POST",
-        body: JSON.stringify({
-          message: replyDraft,
-        }),
+        body: JSON.stringify({ message: replyDraft }),
       },
     );
   }
@@ -385,9 +443,7 @@ export class GraphService {
       `https://graph.microsoft.com/v1.0/me/messages/${emailId}/replyAll`,
       {
         method: "POST",
-        body: JSON.stringify({
-          message: replyDraft,
-        }),
+        body: JSON.stringify({ message: replyDraft }),
       },
     );
   }
@@ -400,9 +456,7 @@ export class GraphService {
       `https://graph.microsoft.com/v1.0/me/messages/${emailId}/forward`,
       {
         method: "POST",
-        body: JSON.stringify({
-          message: forwardDraft,
-        }),
+        body: JSON.stringify({ message: forwardDraft }),
       },
     );
   }
@@ -412,9 +466,7 @@ export class GraphService {
       `https://graph.microsoft.com/v1.0/me/messages/${emailId}`,
       {
         method: "PATCH",
-        body: JSON.stringify({
-          isRead: true,
-        }),
+        body: JSON.stringify({ isRead: true }),
       },
     );
   }
