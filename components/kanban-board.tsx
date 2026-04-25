@@ -5,7 +5,6 @@ import {
   DndContext,
   type DragEndEvent,
   DragOverlay,
-  type DragStartEvent,
   PointerSensor,
   useSensor,
   useSensors,
@@ -137,14 +136,16 @@ export function KanbanBoard() {
         return data || [];
       }, []);
       setCustomColumns(result || []);
-    } catch (error) {
-      console.error(error);
-    }
+    } catch (error) {}
   };
 
-  const loadEmails = async () => {
+  const loadEmails = async (isBackground = false) => {
     if (!accessToken || !account) return;
-    setIsLoading(true);
+
+    if (!isBackground) {
+      setIsLoading(true);
+    }
+
     try {
       const graphService = new GraphService(accessToken);
       const fetchedEmails = await graphService.getAllEmails(100);
@@ -173,9 +174,11 @@ export function KanbanBoard() {
         setAvailableTags(Array.from(allTags));
       }
     } catch (e) {
-      setError("Erro ao carregar");
+      if (!isBackground) setError("Erro ao carregar");
     } finally {
-      setIsLoading(false);
+      if (!isBackground) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -214,9 +217,7 @@ export function KanbanBoard() {
         ...prev,
         [emailId]: { ...prev[emailId], ...updates } as EmailMetadata,
       }));
-    } catch (error) {
-      console.error(error);
-    }
+    } catch (error) {}
   };
 
   const handleThreadUpdated = (updatedThread: EmailThread) => {
@@ -254,9 +255,7 @@ export function KanbanBoard() {
       await Promise.all(
         thread.emails.map((e) => updateEmailMetadata(e.id, updates)),
       );
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) {}
   };
 
   const getThreadsByColumn = (columnId: string) => {
@@ -273,17 +272,21 @@ export function KanbanBoard() {
   useEffect(() => {
     let filtered = [...threads];
 
-    if (activeView === "kanban") {
+    if (activeView === "kanban" || activeView.startsWith("col_")) {
       filtered = filtered.filter((t) => {
-        // --- NOVO: Garante que os e-mails do Arquivo, Eliminados e Spam não aparecem no Kanban ---
-        const isArchivedSpamOrDeleted = t.emails.some((e) =>
-          ["archive", "spam", "deleted"].includes(e.folderType || ""),
-        );
-        if (isArchivedSpamOrDeleted) return false;
+        if (activeView === "kanban") {
+          const isArchivedSpamOrDeleted = t.emails.some((e) =>
+            ["archive", "spam", "deleted"].includes(e.folderType || ""),
+          );
+          if (isArchivedSpamOrDeleted) return false;
 
-        const isOnlyFromMe = t.emails.every((e) => e.isFromMe);
-        const hasColumn = t.emails.some((e) => emailsMetadata[e.id]?.column_id);
-        return !(isOnlyFromMe && !hasColumn);
+          const isOnlyFromMe = t.emails.every((e) => e.isFromMe);
+          const hasColumn = t.emails.some(
+            (e) => emailsMetadata[e.id]?.column_id,
+          );
+          return !(isOnlyFromMe && !hasColumn);
+        }
+        return true;
       });
     }
 
@@ -364,8 +367,14 @@ export function KanbanBoard() {
 
   useEffect(() => {
     if (accessToken && account && !authLoading) {
-      loadEmails();
+      loadEmails(false);
       loadCustomColumns();
+
+      const pollingInterval = setInterval(() => {
+        loadEmails(true);
+      }, 15000);
+
+      return () => clearInterval(pollingInterval);
     }
   }, [accessToken, account, authLoading]);
 
@@ -409,7 +418,7 @@ export function KanbanBoard() {
                   onThreadUpdated={handleThreadUpdated}
                   color={column.color}
                   icon={column.icon}
-                  onEmailSent={loadEmails}
+                  onEmailSent={() => loadEmails(true)}
                   isCollapsed={collapsedColumns.includes(column.id)}
                   onToggleCollapse={() => handleToggleCollapse(column.id)}
                 />
@@ -425,7 +434,7 @@ export function KanbanBoard() {
                   thread={activeThread}
                   emailsMetadata={emailsMetadata}
                   onUpdateMetadata={updateEmailMetadata}
-                  onEmailSent={loadEmails}
+                  onEmailSent={() => loadEmails(true)}
                 />
               </div>
             )}
@@ -449,6 +458,9 @@ export function KanbanBoard() {
               <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
                 {column?.title || "Coluna Desconhecida"}
               </h2>
+              <p className="text-sm text-slate-500 font-medium">
+                Focus Mode: Limpe a sua lista sem distrações.
+              </p>
             </div>
             <Badge
               variant="secondary"
@@ -474,7 +486,66 @@ export function KanbanBoard() {
                     emailsMetadata={emailsMetadata}
                     onUpdateMetadata={updateEmailMetadata}
                     onThreadUpdated={handleThreadUpdated}
-                    onEmailSent={loadEmails}
+                    onEmailSent={() => loadEmails(true)}
+                  />
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    if (activeView === "snoozed") {
+      const now = new Date().getTime();
+      const snoozedThreads = threads.filter((t) =>
+        t.emails.some((e) => {
+          const snoozeDate = emailsMetadata[e.id]?.snoozed_until;
+          return snoozeDate && new Date(snoozeDate).getTime() > now;
+        }),
+      );
+
+      return (
+        <div className="max-w-3xl mx-auto py-4">
+          <div className="flex items-center gap-4 mb-8 pb-6 border-b border-slate-200/50">
+            <div className="h-14 w-14 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-2xl text-indigo-500">
+              <Clock className="h-6 w-6" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
+                Adiados (Snooze)
+              </h2>
+              <p className="text-sm text-slate-500 font-medium">
+                E-mails a descansar. Vão reaparecer no Kanban na data
+                programada.
+              </p>
+            </div>
+            <Badge
+              variant="secondary"
+              className="ml-auto text-sm px-3 py-1 bg-white border border-slate-200 shadow-sm text-indigo-600"
+            >
+              {snoozedThreads.length} emails
+            </Badge>
+          </div>
+
+          <div className="space-y-4">
+            {snoozedThreads.length === 0 ? (
+              <div className="text-center py-16 text-slate-400 bg-white/50 rounded-3xl border border-dashed border-slate-200 shadow-sm">
+                Nenhum e-mail adiado.
+              </div>
+            ) : (
+              snoozedThreads.map((thread) => (
+                <div
+                  key={thread.id}
+                  className="animate-in fade-in slide-in-from-bottom-2 duration-300"
+                >
+                  <EmailThreadCard
+                    thread={thread}
+                    emailsMetadata={emailsMetadata}
+                    onUpdateMetadata={updateEmailMetadata}
+                    onThreadUpdated={handleThreadUpdated}
+                    onEmailSent={() => loadEmails(true)}
+                    isSnoozedView={true}
                   />
                 </div>
               ))
@@ -527,7 +598,7 @@ export function KanbanBoard() {
                     emailsMetadata={emailsMetadata}
                     onUpdateMetadata={updateEmailMetadata}
                     onThreadUpdated={handleThreadUpdated}
-                    onEmailSent={loadEmails}
+                    onEmailSent={() => loadEmails(true)}
                     isArchivedView={true}
                   />
                 </div>
@@ -581,7 +652,7 @@ export function KanbanBoard() {
                     emailsMetadata={emailsMetadata}
                     onUpdateMetadata={updateEmailMetadata}
                     onThreadUpdated={handleThreadUpdated}
-                    onEmailSent={loadEmails}
+                    onEmailSent={() => loadEmails(true)}
                   />
                 </div>
               ))
@@ -591,7 +662,6 @@ export function KanbanBoard() {
       );
     }
 
-    // --- NOVA VISTA: ELIMINADOS ---
     if (activeView === "deleted") {
       const deletedThreads = threads.filter((t) =>
         t.emails.some((e) => e.folderType === "deleted"),
@@ -635,7 +705,7 @@ export function KanbanBoard() {
                     emailsMetadata={emailsMetadata}
                     onUpdateMetadata={updateEmailMetadata}
                     onThreadUpdated={handleThreadUpdated}
-                    onEmailSent={loadEmails}
+                    onEmailSent={() => loadEmails(true)}
                     isDeletedView={true}
                   />
                 </div>
@@ -646,7 +716,6 @@ export function KanbanBoard() {
       );
     }
 
-    // --- NOVA VISTA: SPAM ---
     if (activeView === "spam") {
       const spamThreads = threads.filter((t) =>
         t.emails.some((e) => e.folderType === "spam"),
@@ -690,7 +759,7 @@ export function KanbanBoard() {
                     emailsMetadata={emailsMetadata}
                     onUpdateMetadata={updateEmailMetadata}
                     onThreadUpdated={handleThreadUpdated}
-                    onEmailSent={loadEmails}
+                    onEmailSent={() => loadEmails(true)}
                     isSpamView={true}
                   />
                 </div>
@@ -714,7 +783,7 @@ export function KanbanBoard() {
   return (
     <DashboardLayout
       isLoading={isLoading}
-      onRefresh={loadEmails}
+      onRefresh={() => loadEmails(false)}
       isFiltersVisible={isFiltersVisible}
       onToggleFilters={() => setIsFiltersVisible(!isFiltersVisible)}
       customColumns={customColumns}

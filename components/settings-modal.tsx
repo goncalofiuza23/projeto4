@@ -61,7 +61,6 @@ export function SettingsModal({
             </div>
           </div>
 
-          {/* Tema */}
           <div className="space-y-2">
             <Label className="text-xs font-bold text-slate-500 uppercase">
               Tema do Painel

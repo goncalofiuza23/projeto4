@@ -289,10 +289,8 @@ export function EmailComposer({
           </DialogTitle>
         </DialogHeader>
 
-        {/* CORPO DO FORMULÁRIO */}
         <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col">
           <div className="p-6 space-y-4">
-            {/* Campo PARA */}
             <div className="flex items-start gap-4">
               <label
                 htmlFor="to"
@@ -325,7 +323,6 @@ export function EmailComposer({
               </Button>
             </div>
 
-            {/* Campos CC / CCO / Prioridade (Escondidos por defeito) */}
             {showAdvanced && (
               <div className="animate-in fade-in slide-in-from-top-2 duration-200 space-y-4 pt-1">
                 <div className="flex items-start gap-4">
@@ -385,10 +382,8 @@ export function EmailComposer({
               </div>
             )}
 
-            {/* LINHA DIVISÓRIA */}
             <div className="border-t border-slate-100 ml-16" />
 
-            {/* Campo ASSUNTO */}
             <div className="flex items-start gap-4">
               <label
                 htmlFor="subject"
@@ -408,7 +403,6 @@ export function EmailComposer({
               />
             </div>
 
-            {/* Campo MENSAGEM */}
             <div className="pt-2 flex-1 flex flex-col min-h-[300px]">
               <Textarea
                 id="body"
@@ -428,7 +422,6 @@ export function EmailComposer({
               />
             </div>
 
-            {/* LISTA DE ANEXOS (Só aparece se houver) */}
             {attachments.length > 0 && (
               <div className="pt-4 border-t border-slate-100 flex gap-2 flex-wrap">
                 {attachments.map((file, index) => (
@@ -460,7 +453,6 @@ export function EmailComposer({
           </div>
         </div>
 
-        {/* RODAPÉ DO FORMULÁRIO */}
         <div className="p-4 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between">
           <div className="flex items-center">
             <input

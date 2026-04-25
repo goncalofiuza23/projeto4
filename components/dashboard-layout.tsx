@@ -207,7 +207,6 @@ export function DashboardLayout({
 
   return (
     <div className="flex h-screen w-full overflow-hidden m-0 p-0">
-      {/* SIDEBAR */}
       <aside
         className={`bg-white border-r border-slate-200 flex flex-col z-20 shadow-xl transition-all duration-300 ease-in-out ${
           isSidebarCollapsed ? "w-20" : "w-72"
@@ -273,7 +272,7 @@ export function DashboardLayout({
             )}
             {renderMenuItem("kanban", LayoutDashboard, "O meu Kanban")}
             {renderMenuItem("sent", Send, "Enviados")}
-            {/* {renderMenuItem("snoozed", Clock, "Adiados (Snoozed)")} */}
+            {renderMenuItem("snoozed", Clock, "Adiados (Snooze)")}
             {renderMenuItem("archived", Archive, "Arquivados")}
             {renderMenuItem("spam", AlertOctagon, "Spam")}
             {renderMenuItem("deleted", Trash2, "Eliminados")}
@@ -324,26 +323,6 @@ export function DashboardLayout({
                 Ferramentas
               </p>
             )}
-            <Button
-              variant="ghost"
-              onClick={onRefresh}
-              disabled={isLoading}
-              title="Atualizar"
-              className={`w-full h-10 rounded-xl transition-all text-slate-600 hover:bg-slate-50 hover:text-slate-900 ${
-                isSidebarCollapsed
-                  ? "justify-center px-0"
-                  : "justify-start gap-3 px-3"
-              }`}
-            >
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin shrink-0 text-slate-400" />
-              ) : (
-                <RefreshCw className="h-4 w-4 shrink-0 text-slate-400" />
-              )}
-              {!isSidebarCollapsed && (
-                <span className="text-xs truncate">Atualizar Emails</span>
-              )}
-            </Button>
 
             <Button
               variant="ghost"
@@ -367,7 +346,6 @@ export function DashboardLayout({
           </div>
         </div>
 
-        {/* RODAPÉ: PERFIL E SAIR */}
         <div className="mt-auto p-4 border-t border-slate-100 bg-white shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.05)]">
           <div
             className={`flex ${isSidebarCollapsed ? "flex-col py-3" : "items-center justify-between p-2"} gap-3 bg-slate-50 rounded-2xl border border-slate-100`}
@@ -408,7 +386,6 @@ export function DashboardLayout({
         </div>
       </aside>
 
-      {/* COMPONENTE DO MODAL DE DEFINIÇÕES */}
       <SettingsModal
         isOpen={isSettingsModalOpen}
         onClose={setIsSettingsModalOpen}

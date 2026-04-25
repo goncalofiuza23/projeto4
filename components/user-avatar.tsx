@@ -43,7 +43,6 @@ export function UserAvatar({
   const initials = getInitials(name, email);
   const backgroundColor = stringToColor(email);
 
-  // Determinar a cor do texto (preto ou branco) baseada na cor de fundo para garantir contraste
   const r = parseInt(backgroundColor.slice(1, 3), 16);
   const g = parseInt(backgroundColor.slice(3, 5), 16);
   const b = parseInt(backgroundColor.slice(5, 7), 16);

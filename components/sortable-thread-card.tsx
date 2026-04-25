@@ -8,7 +8,7 @@ import type { EmailMetadata } from "@/lib/supabase";
 
 interface SortableThreadCardProps {
   thread: EmailThread;
-  columnId: string; // <-- ADICIONADO NA INTERFACE
+  columnId: string;
   emailsMetadata: Record<string, EmailMetadata>;
   onUpdateMetadata: (emailId: string, updates: Partial<EmailMetadata>) => void;
   onThreadUpdated?: (thread: EmailThread) => void;
@@ -32,7 +32,6 @@ export function SortableThreadCard({
     isDragging,
   } = useSortable({
     id: thread.id,
-    // ADICIONADO COLUMN ID AQUI EM BAIXO PARA O DRAG SABER ONDE ESTÁ
     data: { type: "thread", thread, columnId },
   });
 

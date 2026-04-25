@@ -176,7 +176,6 @@ export function FiltersPanel({
   return (
     <div className="mb-6 animate-in fade-in slide-in-from-top-4 duration-300">
       <div className="bg-white/70 backdrop-blur-xl border border-slate-200/60 shadow-xl rounded-2xl overflow-hidden">
-        {/* Cabeçalho */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/50 bg-slate-50/30">
           <div className="flex items-center gap-2">
             <div className="bg-blue-100 p-1.5 rounded-lg">
@@ -209,9 +208,7 @@ export function FiltersPanel({
           </div>
         </div>
 
-        {/* Corpo dos Filtros */}
         <div className="p-6 space-y-6">
-          {/* Linha 1: Buscas de Texto */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <Label
@@ -247,7 +244,6 @@ export function FiltersPanel({
 
           <div className="h-px w-full bg-slate-200/50" />
 
-          {/* Linha 2: Tags e Prioridade */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-3">
               <Label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
@@ -334,7 +330,6 @@ export function FiltersPanel({
 
           <div className="h-px w-full bg-slate-200/50" />
 
-          {/* Linha 3: Status, Anexos, Data */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
               <Label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">

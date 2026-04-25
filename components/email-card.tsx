@@ -88,7 +88,6 @@ export function EmailCard({
     });
   };
 
-  // Verificar se é email enviado
   const graphService = new GraphService("");
   const isEmailSent = graphService.isEmailInSentFolder(email);
 
@@ -232,7 +231,6 @@ export function EmailCard({
           )}
         </CardContent>
       </Card>
-      {/* Substituir o Dialog de visualização pelo novo componente */}
       <EmailViewer
         email={email}
         metadata={metadata}

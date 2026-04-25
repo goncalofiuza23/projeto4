@@ -29,7 +29,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const { toast } = useToast();
 
-  // Função interna para limpar erros de interação presa
   const clearMsalStuckStatus = () => {
     Object.keys(sessionStorage).forEach((key) => {
       if (
@@ -61,7 +60,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             });
             setAccessToken(response.accessToken);
           } catch (error) {
-            // Se falhar o token silencioso, não entramos em pânico, apenas limpamos
             setAccount(null);
             setAccessToken(null);
           }
@@ -81,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async () => {
     if (isAuthenticating) return;
     setIsAuthenticating(true);
-    clearMsalStuckStatus(); // Limpa antes de tentar
+    clearMsalStuckStatus();
 
     try {
       const response: AuthenticationResult = await msalInstance.loginPopup({
@@ -115,12 +113,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.warn("Logout popup fechado ou erro. Forçando limpeza...");
     } finally {
-      // LIMPEZA TOTAL (Resolve o teu limbo)
       sessionStorage.clear();
       localStorage.clear();
       setAccount(null);
       setAccessToken(null);
-      window.location.href = window.location.origin; // Redireciona para o login
+      window.location.href = window.location.origin;
     }
   };
 

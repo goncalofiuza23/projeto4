@@ -84,7 +84,7 @@ export interface Email {
   internetMessageId?: string;
   isFromMe?: boolean;
   threadEmails?: Email[];
-  folderType?: "inbox" | "sent" | "archive" | "deleted" | "spam"; // NOVO: Suporta deleted e spam
+  folderType?: "inbox" | "sent" | "archive" | "deleted" | "spam";
 }
 
 export interface EmailThread {
@@ -140,10 +140,13 @@ export class GraphService {
 
   private async makeRequest(url: string, options: RequestInit = {}) {
     const response = await fetch(url, {
+      cache: "no-store",
       ...options,
       headers: {
         Authorization: `Bearer ${this.accessToken}`,
         "Content-Type": "application/json",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        Pragma: "no-cache",
         ...options.headers,
       },
     });
@@ -158,6 +161,15 @@ export class GraphService {
       } catch {
         errorMessage = errorText || errorMessage;
       }
+
+      if (
+        response.status === 404 &&
+        options.method === "POST" &&
+        url.includes("/move")
+      ) {
+        return response;
+      }
+
       throw new Error(errorMessage);
     }
     return response;
@@ -174,7 +186,7 @@ export class GraphService {
       this.userEmail = user.mail || user.userPrincipalName;
       return this.userEmail;
     } catch (error) {
-      console.error("Erro ao obter email do usuário:", error);
+      console.error(error);
       return "";
     }
   }
@@ -192,7 +204,6 @@ export class GraphService {
       const blob = await response.blob();
       return URL.createObjectURL(blob);
     } catch (error) {
-      console.error(`❌ Erro ao buscar foto para ${email}:`, error);
       return null;
     }
   }
@@ -241,12 +252,10 @@ export class GraphService {
         folderType: "archive",
       }));
     } catch (error) {
-      console.error("Erro ao buscar arquivo:", error);
       return [];
     }
   }
 
-  // --- NOVA FUNÇÃO: Ler pasta de Eliminados ---
   async getDeletedEmails(top = 50): Promise<Email[]> {
     try {
       const response = await this.makeRequest(
@@ -262,12 +271,10 @@ export class GraphService {
         folderType: "deleted",
       }));
     } catch (error) {
-      console.error("Erro ao buscar eliminados:", error);
       return [];
     }
   }
 
-  // --- NOVA FUNÇÃO: Ler pasta de Spam ---
   async getSpamEmails(top = 50): Promise<Email[]> {
     try {
       const response = await this.makeRequest(
@@ -283,14 +290,12 @@ export class GraphService {
         folderType: "spam",
       }));
     } catch (error) {
-      console.error("Erro ao buscar spam:", error);
       return [];
     }
   }
 
   async getAllEmails(top = 50): Promise<Email[]> {
     try {
-      // Vai buscar a todas as 5 pastas
       const [
         inboxEmails,
         sentEmails,
@@ -318,7 +323,6 @@ export class GraphService {
           new Date(a.receivedDateTime).getTime(),
       );
     } catch (error) {
-      console.error("Erro ao buscar todos os emails:", error);
       return this.getEmails(top);
     }
   }
@@ -479,6 +483,15 @@ export class GraphService {
         body: JSON.stringify({
           destinationId: folderId,
         }),
+      },
+    );
+  }
+
+  async deleteMessage(emailId: string): Promise<void> {
+    await this.makeRequest(
+      `https://graph.microsoft.com/v1.0/me/messages/${emailId}`,
+      {
+        method: "DELETE",
       },
     );
   }

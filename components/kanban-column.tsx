@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useDroppable, useDndContext } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -18,7 +18,14 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Inbox,
+  Clock,
+  ChevronDown,
 } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 interface KanbanColumnProps {
   id: string;
@@ -57,10 +64,11 @@ export function KanbanColumn({
   const { over } = useDndContext();
   const { setNodeRef, isOver } = useDroppable({ id });
 
+  const [isSnoozedOpen, setIsSnoozedOpen] = useState(false);
+
   const isOverCardInColumn = threads.some((t) => t.id === over?.id);
   const isDropTarget = isOver || isOverCardInColumn || over?.id === id;
 
-  // NOVA FUNÇÃO: Deteta a cor base da coluna para aplicar na borda do topo
   const getBorderColorClass = (colorStr: string) => {
     if (!colorStr) return "border-t-slate-300";
     if (colorStr.includes("blue")) return "border-t-blue-500";
@@ -73,10 +81,31 @@ export function KanbanColumn({
     if (colorStr.includes("pink")) return "border-t-pink-500";
     if (colorStr.includes("rose")) return "border-t-rose-500";
     if (colorStr.includes("teal")) return "border-t-teal-500";
-    return "border-t-slate-300"; // Cor por defeito
+    return "border-t-slate-300";
   };
 
   const topBorderClass = getBorderColorClass(color);
+
+  const { activeThreads, snoozedThreads } = useMemo(() => {
+    const now = new Date().getTime();
+    const active: EmailThread[] = [];
+    const snoozed: EmailThread[] = [];
+
+    threads.forEach((thread) => {
+      const isSnoozed = thread.emails.some((e) => {
+        const snoozeDate = emailsMetadata[e.id]?.snoozed_until;
+        return snoozeDate && new Date(snoozeDate).getTime() > now;
+      });
+
+      if (isSnoozed) {
+        snoozed.push(thread);
+      } else {
+        active.push(thread);
+      }
+    });
+
+    return { activeThreads: active, snoozedThreads: snoozed };
+  }, [threads, emailsMetadata]);
 
   const groupedThreads = useMemo(() => {
     const getThreadHighestPriority = (thread: EmailThread) => {
@@ -90,7 +119,7 @@ export function KanbanColumn({
       return highest;
     };
 
-    const sortedThreads = [...threads].sort((a, b) => {
+    const sortedThreads = [...activeThreads].sort((a, b) => {
       const weightA = getThreadHighestPriority(a);
       const weightB = getThreadHighestPriority(b);
       if (weightA !== weightB) return weightB - weightA;
@@ -131,13 +160,12 @@ export function KanbanColumn({
     });
 
     return groups;
-  }, [threads, emailsMetadata]);
+  }, [activeThreads, emailsMetadata]);
 
   const activeGroups = Object.entries(groupedThreads).filter(
     ([_, groupThreads]) => groupThreads.length > 0,
   );
 
-  // --- DESIGN PARA COLUNA COLAPSADA (ESTREITA) ---
   if (isCollapsed) {
     return (
       <div
@@ -157,14 +185,14 @@ export function KanbanColumn({
             {title}
           </h3>
         </div>
+        {/* Mostra apenas a conta dos ATIVOS na vista colapsada */}
         <Badge variant="secondary" className={`${color} text-[10px] px-1 mb-2`}>
-          {threads.length}
+          {activeThreads.length}
         </Badge>
       </div>
     );
   }
 
-  // --- DESIGN PARA COLUNA NORMAL ---
   return (
     <Card
       className={`shrink-0 w-[400px] bg-slate-50/50 flex flex-col h-[calc(100vh-180px)] transition-all duration-300 border-x border-b border-t-4 border-x-slate-200 border-b-slate-200 ${topBorderClass}`}
@@ -178,7 +206,7 @@ export function KanbanColumn({
               variant="secondary"
               className={`${color} ml-2 text-[10px] h-5`}
             >
-              {threads.length}
+              {activeThreads.length}
             </Badge>
           </CardTitle>
 
@@ -202,11 +230,62 @@ export function KanbanColumn({
           data-column-id={id}
           className={`flex-1 min-h-[70vh] pb-32 rounded-xl transition-all duration-300 ${isDropTarget ? "bg-blue-50/50 ring-2 ring-blue-400/20 ring-offset-2 bg-opacity-40" : ""}`}
         >
+          {snoozedThreads.length > 0 && (
+            <Collapsible
+              open={isSnoozedOpen}
+              onOpenChange={setIsSnoozedOpen}
+              className="mb-4"
+            >
+              <CollapsibleTrigger asChild>
+                <div className="w-full bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition-colors rounded-xl py-2 px-3 flex items-center justify-between cursor-pointer group mt-2 shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-indigo-500" />
+                    <span className="text-xs font-semibold text-indigo-700">
+                      {snoozedThreads.length}{" "}
+                      {snoozedThreads.length === 1
+                        ? "E-mail Adiado"
+                        : "E-mails Adiados"}
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 text-indigo-400 group-hover:text-indigo-700 bg-transparent hover:bg-transparent"
+                  >
+                    {isSnoozedOpen ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-3 pb-2 space-y-3">
+                <SortableContext
+                  items={snoozedThreads.map((t) => t.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {snoozedThreads.map((thread) => (
+                    <SortableThreadCard
+                      key={thread.id}
+                      thread={thread}
+                      columnId={id}
+                      emailsMetadata={emailsMetadata}
+                      onUpdateMetadata={onUpdateMetadata}
+                      onThreadUpdated={onThreadUpdated}
+                      onEmailSent={onEmailSent}
+                    />
+                  ))}
+                </SortableContext>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
           <SortableContext
-            items={threads.map((t) => t.id)}
+            items={activeThreads.map((t) => t.id)}
             strategy={verticalListSortingStrategy}
           >
-            {threads.length === 0 ? (
+            {activeThreads.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 px-4 border-2 border-dashed border-slate-200/50 rounded-2xl bg-slate-50/30 mt-2 transition-colors">
                 <div className="bg-white p-3 rounded-full shadow-sm mb-3 ring-4 ring-slate-50">
                   <Inbox className="h-6 w-6 text-slate-300" />
@@ -215,7 +294,7 @@ export function KanbanColumn({
                   Tudo em dia!
                 </p>
                 <p className="text-[11px] text-slate-400/80 text-center">
-                  Nenhuma conversa nesta coluna no momento.
+                  Nenhuma conversa ativa nesta coluna.
                 </p>
               </div>
             ) : (

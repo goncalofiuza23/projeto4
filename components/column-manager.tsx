@@ -106,7 +106,6 @@ const iconOptions = [
   "💡",
 ];
 
-// --- COMPONENTE: Item Ordenável ---
 function SortableColumnItem({
   column,
   onEdit,
@@ -185,7 +184,6 @@ function SortableColumnItem({
     </div>
   );
 }
-// ----------------------------------------
 
 export function ColumnManager({
   columns,
@@ -197,7 +195,6 @@ export function ColumnManager({
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingColumn, setEditingColumn] = useState<CustomColumn | null>(null);
 
-  // NOVO: Estado para guardar qual a coluna que está a ser apagada
   const [columnToDelete, setColumnToDelete] = useState<{
     id: string;
     name: string;
@@ -322,7 +319,6 @@ export function ColumnManager({
     }
   };
 
-  // Alterada para usar o estado columnToDelete e fechar o modal
   const confirmDeleteColumn = async () => {
     if (!account || !columnToDelete) return;
 
@@ -396,7 +392,6 @@ export function ColumnManager({
             </div>
 
             <div className="space-y-3">
-              {/* Coluna padrão fixa */}
               <div className="flex items-center justify-between p-3.5 border border-slate-200/60 rounded-xl bg-slate-100/50 opacity-80">
                 <div className="flex items-center gap-3">
                   <div className="p-1.5 px-2">
@@ -419,7 +414,6 @@ export function ColumnManager({
                 </Badge>
               </div>
 
-              {/* Colunas personalizadas com Drag and Drop */}
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
@@ -455,7 +449,6 @@ export function ColumnManager({
         </DialogContent>
       </Dialog>
 
-      {/* Dialog para criar nova coluna */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
         <DialogContent className="sm:max-w-md p-0 rounded-2xl overflow-hidden border-slate-200 shadow-2xl">
           <DialogHeader className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
@@ -551,7 +544,6 @@ export function ColumnManager({
         </DialogContent>
       </Dialog>
 
-      {/* Dialog para editar coluna */}
       {editingColumn && (
         <Dialog
           open={!!editingColumn}
@@ -655,7 +647,6 @@ export function ColumnManager({
         </Dialog>
       )}
 
-      {/* NOVO: Dialog para Confirmar Eliminação de Coluna */}
       <Dialog
         open={!!columnToDelete}
         onOpenChange={(open) => !open && setColumnToDelete(null)}
