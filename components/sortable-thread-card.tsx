@@ -17,7 +17,7 @@ interface SortableThreadCardProps {
 
 export function SortableThreadCard({
   thread,
-  columnId, // <-- RECEBIDO AQUI
+  columnId,
   emailsMetadata,
   onUpdateMetadata,
   onThreadUpdated,

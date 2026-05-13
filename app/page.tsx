@@ -71,7 +71,7 @@ function HomeContent() {
               <div className="flex items-center gap-4 text-slate-700 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                 <Columns3 className="h-6 w-6 text-blue-500 shrink-0" />
                 <span className="font-medium">
-                  Colunas personalizadas para triagem rápida.
+                  Colunas personalizadas para organização rápida.
                 </span>
               </div>
               <div className="flex items-center gap-4 text-slate-700 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">

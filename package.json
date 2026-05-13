@@ -9,7 +9,7 @@
     "start": "next start"
   },
   "dependencies": {
-    "@azure/msal-browser": "latest",
+    "@azure/msal-browser": "^2.38.3",
     "@dnd-kit/core": "latest",
     "@dnd-kit/sortable": "latest",
     "@dnd-kit/utilities": "latest",

@@ -34,6 +34,23 @@ import {
   type Email,
 } from "@/lib/microsoft-graph";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast"; 
+
+function UndoCountdown() {
+  const [timeLeft, setTimeLeft] = useState(10);
+
+  useEffect(() => {
+    if (timeLeft <= 0) return;
+    const timer = setInterval(() => setTimeLeft((prev) => prev - 1), 1000);
+    return () => clearInterval(timer);
+  }, [timeLeft]);
+
+  return (
+    <span>
+      Tem <strong className="font-bold">{timeLeft}</strong> {timeLeft === 1 ? "segundo" : "segundos"} para anular o envio.
+    </span>
+  );
+}
 
 interface EmailComposerProps {
   isOpen: boolean;
@@ -74,12 +91,10 @@ export function EmailComposer({
   const [ccInput, setCcInput] = useState("");
   const [bccInput, setBccInput] = useState("");
 
-  // Inicializar dados baseado no modo
   useEffect(() => {
     if (!isOpen) return;
 
     if (!originalEmail) {
-      // Reset se for novo
       if (mode === "new") {
         setToInput("");
         setCcInput("");
@@ -99,29 +114,18 @@ export function EmailComposer({
     }
 
     let subject = originalEmail.subject || "";
-    let bodyContent = "";
+    // O body Content começa sempre limpo para nós escrevermos apenas a resposta nova!
+    let bodyContent = ""; 
 
     switch (mode) {
       case "reply":
       case "replyAll":
         subject = subject.startsWith("Re: ") ? subject : `Re: ${subject}`;
-        bodyContent = `
-          <br><br>
-          <div style="border-left: 2px solid #ccc; padding-left: 10px; margin-left: 10px;">
-            <p><strong>De:</strong> ${originalEmail.from?.emailAddress?.name || originalEmail.from?.emailAddress?.address}</p>
-            <p><strong>Enviado:</strong> ${new Date(originalEmail.receivedDateTime).toLocaleString("pt-PT")}</p>
-            <p><strong>Para:</strong> ${originalEmail.toRecipients?.map((r) => r.emailAddress.address).join(", ") || ""}</p>
-            <p><strong>Assunto:</strong> ${originalEmail.subject}</p>
-            <br>
-            ${originalEmail.body?.content || originalEmail.bodyPreview}
-          </div>
-        `;
 
         const replyTo = originalEmail.replyTo?.[0] || originalEmail.from;
         if (mode === "reply") {
           setToInput(replyTo?.emailAddress?.address || "");
         } else {
-          // Reply All
           const allRecipients = [
             ...(originalEmail.toRecipients || []),
             ...(originalEmail.ccRecipients || []),
@@ -139,18 +143,6 @@ export function EmailComposer({
 
       case "forward":
         subject = subject.startsWith("Fwd: ") ? subject : `Fwd: ${subject}`;
-        bodyContent = `
-          <br><br>
-          <div style="border-left: 2px solid #ccc; padding-left: 10px; margin-left: 10px;">
-            <p><strong>---------- Mensagem encaminhada ----------</strong></p>
-            <p><strong>De:</strong> ${originalEmail.from?.emailAddress?.name || originalEmail.from?.emailAddress?.address}</p>
-            <p><strong>Data:</strong> ${new Date(originalEmail.receivedDateTime).toLocaleString("pt-PT")}</p>
-            <p><strong>Assunto:</strong> ${originalEmail.subject}</p>
-            <p><strong>Para:</strong> ${originalEmail.toRecipients?.map((r) => r.emailAddress.address).join(", ") || ""}</p>
-            <br>
-            ${originalEmail.body?.content || originalEmail.bodyPreview}
-          </div>
-        `;
         break;
     }
 
@@ -188,72 +180,82 @@ export function EmailComposer({
   const handleSend = async () => {
     if (!accessToken) return;
 
-    setIsLoading(true);
-    try {
-      const graphService = new GraphService(accessToken);
+    onClose();
 
-      // Preparar anexos
-      const attachmentsData = await Promise.all(
-        attachments.map(async (file) => ({
-          "@odata.type": "#microsoft.graph.fileAttachment",
-          name: file.name,
-          contentBytes: await graphService.fileToBase64(file),
-          contentType: file.type || "application/octet-stream",
-        })),
-      );
+    const timeoutId = setTimeout(async () => {
+      try {
+        const graphService = new GraphService(accessToken);
 
-      const finalEmailData: EmailDraft = {
-        ...emailData,
-        toRecipients: parseEmailAddresses(toInput),
-        ccRecipients: parseEmailAddresses(ccInput),
-        bccRecipients: parseEmailAddresses(bccInput),
-        attachments: attachmentsData,
-      };
+        const attachmentsData = await Promise.all(
+          attachments.map(async (file) => ({
+            "@odata.type": "#microsoft.graph.fileAttachment",
+            name: file.name,
+            contentBytes: await graphService.fileToBase64(file),
+            contentType: file.type || "application/octet-stream",
+          })),
+        );
 
-      switch (mode) {
-        case "new":
-          await graphService.sendEmail(finalEmailData);
-          break;
-        case "reply":
-          await graphService.replyToEmail(originalEmail!.id, finalEmailData);
-          break;
-        case "replyAll":
-          await graphService.replyAllToEmail(originalEmail!.id, finalEmailData);
-          break;
-        case "forward":
-          await graphService.forwardEmail(originalEmail!.id, finalEmailData);
-          break;
+        const finalEmailData: EmailDraft = {
+          ...emailData,
+          toRecipients: parseEmailAddresses(toInput),
+          ccRecipients: parseEmailAddresses(ccInput),
+          bccRecipients: parseEmailAddresses(bccInput),
+          attachments: attachmentsData,
+        };
+
+        switch (mode) {
+          case "new":
+            await graphService.sendEmail(finalEmailData);
+            break;
+          case "reply":
+            await graphService.replyToEmail(originalEmail!.id, finalEmailData);
+            break;
+          case "replyAll":
+            await graphService.replyAllToEmail(originalEmail!.id, finalEmailData);
+            break;
+          case "forward":
+            await graphService.forwardEmail(originalEmail!.id, finalEmailData);
+            break;
+        }
+
+        toast({
+          title: "Email enviado com sucesso!",
+          description: "A sua mensagem foi entregue.",
+          duration: 4000,
+        });
+
+        if (onEmailSent) {
+          onEmailSent();
+        }
+      } catch (error) {
+        console.error("Erro ao enviar email:", error);
+        toast({
+          title: "Erro ao enviar email",
+          description: error instanceof Error ? error.message : "Ocorreu um erro inesperado.",
+          variant: "destructive",
+        });
       }
+    }, 10000);
 
-      toast({
-        title: "Email enviado com sucesso!",
-        description: `O seu email foi ${
-          mode === "new"
-            ? "enviado"
-            : mode === "reply" || mode === "replyAll"
-              ? "respondido"
-              : "encaminhado"
-        } com sucesso.`,
-      });
-
-      if (onEmailSent) {
-        onEmailSent();
-      }
-
-      onClose();
-    } catch (error) {
-      console.error("Erro ao enviar email:", error);
-      toast({
-        title: "Erro ao enviar email",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Ocorreu um erro inesperado.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    toast({
+      title: "A enviar mensagem...",
+      description: <UndoCountdown />,
+      duration: 10000,
+      action: (
+        <ToastAction 
+          altText="Anular envio" 
+          onClick={() => {
+            clearTimeout(timeoutId);
+            toast({
+              title: "Envio Anulado",
+              description: "O e-mail foi cancelado e não foi enviado.",
+            });
+          }}
+        >
+          Anular
+        </ToastAction>
+      ),
+    });
   };
 
   const getTitle = () => {
@@ -281,7 +283,10 @@ export function EmailComposer({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0 rounded-2xl gap-0 border-slate-200">
+      <DialogContent 
+        className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0 rounded-2xl gap-0 border-slate-200"
+        onPointerDown={(e) => e.stopPropagation()}
+      >
         {/* CABEÇALHO */}
         <DialogHeader className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
           <DialogTitle className="text-lg font-bold text-slate-800 flex items-center gap-2">
@@ -406,14 +411,20 @@ export function EmailComposer({
             <div className="pt-2 flex-1 flex flex-col min-h-[300px]">
               <Textarea
                 id="body"
-                value={emailData.body.content.replace(/<[^>]*>?/gm, "")} // Remove HTML temporariamente da view, ideal era um Rich Text Editor depois
+                value={emailData.body.content
+                  .replace(/<br\s*\/?>/gi, "\n")
+                  .replace(/<\/p>|<\/div>|<\/li>|<\/h[1-6]>/gi, "\n")
+                  .replace(/<hr\s*\/?>/gi, "\n________________________________________\n")
+                  .replace(/<[^>]*>?/gm, "")
+                  .replace(/&nbsp;/g, " ")
+                } 
                 onChange={(e) =>
                   setEmailData({
                     ...emailData,
                     body: {
                       ...emailData.body,
                       content: e.target.value.replace(/\n/g, "<br>"),
-                    }, // Simples conversão de linha
+                    },
                   })
                 }
                 placeholder="Escreva a sua mensagem aqui..."

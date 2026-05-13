@@ -120,7 +120,16 @@ export const EmailThreadCard = memo(function EmailThreadCard({
     return `${thread.participants[0]} +${thread.participants.length - 1}`;
   };
 
-  const latestEmail = thread.emails[thread.emails.length - 1];
+  // Garante que encontramos o primeiro e-mail da thread (o pedido original)
+  const originalEmail = thread.emails.reduce((oldest, current) => 
+    new Date(current.receivedDateTime).getTime() < new Date(oldest.receivedDateTime).getTime() ? current : oldest
+  );
+
+  // E a última resposta (para podermos abrir a mensagem mais recente ao clicar no card)
+  const latestEmail = thread.emails.reduce((newest, current) => 
+    new Date(current.receivedDateTime).getTime() > new Date(newest.receivedDateTime).getTime() ? current : newest
+  );
+
   const hasAttachments = thread.emails.some((e) => e.hasAttachments);
   const isUnread = thread.hasUnread;
 
@@ -170,7 +179,8 @@ export const EmailThreadCard = memo(function EmailThreadCard({
   useEffect(() => {
     let isMounted = true;
     const fetchSenderPhoto = async () => {
-      const senderEmail = latestEmail.from?.emailAddress?.address;
+      // Agora vamos buscar a foto do Remetente Original, e não de quem respondeu em último
+      const senderEmail = originalEmail.from?.emailAddress?.address;
       if (!accessToken || !senderEmail) return;
       try {
         const graphService = new GraphService(accessToken);
@@ -184,7 +194,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
     return () => {
       isMounted = false;
     };
-  }, [accessToken, latestEmail.from?.emailAddress?.address]);
+  }, [accessToken, originalEmail.from?.emailAddress?.address]);
 
   const handleMarkAsRead = async (emailId: string) => {
     if (!accessToken) return;
@@ -437,6 +447,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
             className="p-4 pb-3 cursor-pointer relative flex flex-col"
             onClick={(e) => {
               e.stopPropagation();
+              // Abre sempre o mais recente para leres a última resposta
               setSelectedEmail(latestEmail.id);
               if (!latestEmail.isRead) handleMarkAsRead(latestEmail.id);
             }}
@@ -544,9 +555,10 @@ export const EmailThreadCard = memo(function EmailThreadCard({
 
             <div className="flex gap-3 pr-8 w-full">
               <div className="flex flex-col items-center gap-2 mt-1">
+                {/* Mostra a foto e informações de quem enviou o primeiro e-mail */}
                 <UserAvatar
-                  name={latestEmail.from?.emailAddress?.name}
-                  email={latestEmail.from?.emailAddress?.address || ""}
+                  name={originalEmail.from?.emailAddress?.name}
+                  email={originalEmail.from?.emailAddress?.address || ""}
                   imageUrl={avatarUrl}
                   className="h-10 w-10 flex-shrink-0 shadow-sm"
                 />
@@ -589,8 +601,9 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                   )}
                 </h3>
 
+                {/* Agora o texto de resumo do card é baseado no e-mail original */}
                 <p className="text-xs line-clamp-2 text-slate-500 leading-relaxed pr-2">
-                  {latestEmail.bodyPreview}
+                  {originalEmail.bodyPreview}
                 </p>
               </div>
             </div>
@@ -680,8 +693,9 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                       name={item.from?.emailAddress?.name}
                       email={item.from?.emailAddress?.address || ""}
                       imageUrl={
+                        // Mostra a foto no histórico se for a pessoa original
                         item.from?.emailAddress?.address ===
-                        latestEmail.from?.emailAddress?.address
+                        originalEmail.from?.emailAddress?.address
                           ? avatarUrl
                           : undefined
                       }

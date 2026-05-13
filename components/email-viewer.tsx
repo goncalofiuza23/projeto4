@@ -31,6 +31,7 @@ import type { EmailMetadata, Subtask } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { EmailComposer } from "./email-composer";
 import { Input } from "@/components/ui/input";
+import { UserAvatar } from "./user-avatar";
 
 interface EmailViewerProps {
   email: Email;
@@ -72,15 +73,14 @@ export function EmailViewer({
     "reply" | "replyAll" | "forward" | null
   >(null);
 
-  // Estados para Checklist
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null); // ESTADO PARA GUARDAR A FOTO
   const [subtasks, setSubtasks] = useState<Subtask[]>(metadata?.subtasks || []);
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [newTaskText, setNewTaskText] = useState("");
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingTaskText, setEditingTaskText] = useState("");
-  const [isTasksOpen, setIsTasksOpen] = useState(false); // Controla se o painel de tarefas está aberto
+  const [isTasksOpen, setIsTasksOpen] = useState(false);
 
-  // Sincroniza estado local se o metadata mudar externamente
   useEffect(() => {
     if (metadata?.subtasks) {
       setSubtasks(metadata.subtasks);
@@ -151,7 +151,6 @@ export function EmailViewer({
     }
   };
 
-  // Funções da Checklist
   const saveTasksToDB = (newTasks: Subtask[]) => {
     setSubtasks(newTasks);
     onUpdateMetadata(email.id, { subtasks: newTasks });
@@ -210,10 +209,37 @@ export function EmailViewer({
 
     if (emailToRender.body?.content) {
       if (emailToRender.body.contentType === "html") {
+        let processedHtml = emailToRender.body.content;
+
+        if (emailToRender.attachments && emailToRender.attachments.length > 0) {
+          emailToRender.attachments.forEach((att: any) => {
+            if (att.contentBytes) {
+              const base64String = `data:${att.contentType || "image/png"};base64,${att.contentBytes}`;
+              
+              if (att.contentId) {
+                const cleanCid = att.contentId.replace(/[<>]/g, '');
+                const cidRegex1 = new RegExp(`cid:${cleanCid}`, 'gi');
+                processedHtml = processedHtml.replace(cidRegex1, base64String);
+                
+                const cidRegex2 = new RegExp(`cid:${att.contentId}`, 'gi');
+                processedHtml = processedHtml.replace(cidRegex2, base64String);
+              }
+
+              if (att.name) {
+                const nameRegex = new RegExp(`cid:${att.name}`, 'gi');
+                processedHtml = processedHtml.replace(nameRegex, base64String);
+                
+                const directNameRegex = new RegExp(`src=["']${att.name}["']`, 'gi');
+                processedHtml = processedHtml.replace(directNameRegex, `src="${base64String}"`);
+              }
+            }
+          });
+        }
+
         return (
           <div
             className="prose prose-sm max-w-none prose-slate"
-            dangerouslySetInnerHTML={{ __html: emailToRender.body.content }}
+            dangerouslySetInnerHTML={{ __html: processedHtml }}
           />
         );
       } else {
@@ -242,16 +268,67 @@ export function EmailViewer({
     );
   };
 
+  // Efeito combinado: Carrega o email E a fotografia de quem o enviou!
   useEffect(() => {
     if (isOpen && email.id) {
       loadFullEmail();
+
+      let objectUrl: string | null = null;
+
+      const fetchProfilePicture = async () => {
+        if (!accessToken || !email.from?.emailAddress?.address) return;
+        try {
+          const address = email.from.emailAddress.address;
+          // Pede diretamente a foto real à Microsoft
+          const res = await fetch(`https://graph.microsoft.com/v1.0/users/${address}/photo/$value`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          
+          if (res.ok) {
+            const blob = await res.blob();
+            objectUrl = URL.createObjectURL(blob);
+            setAvatarUrl(objectUrl);
+          }
+        } catch (err) {
+          // Se falhar (como em contas do hotmail), falha de forma invisível. O UserAvatar toma conta do recado!
+        }
+      };
+
+      fetchProfilePicture();
+
+      return () => {
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        setAvatarUrl(null);
+      };
     }
   }, [isOpen, email.id]);
+
+  const visibleAttachments = fullEmail?.attachments?.filter((att: any) => {
+    if (att.isInline) return false;
+    
+    const htmlContent = fullEmail.body?.content || "";
+
+    if (att.contentId) {
+      const cleanCid = att.contentId.replace(/[<>]/g, '');
+      const regex = new RegExp(`cid:${cleanCid}`, 'i');
+      if (regex.test(htmlContent)) return false;
+    }
+
+    if (att.name) {
+      const regexName = new RegExp(`cid:${att.name}`, 'i');
+      const regexDirect = new RegExp(`src=["']${att.name}["']`, 'i');
+      if (regexName.test(htmlContent) || regexDirect.test(htmlContent)) {
+        return false;
+      }
+    }
+    
+    return true;
+  }) || [];
 
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-5xl w-[90vw] max-h-[90vh] h-[90vh] overflow-hidden flex flex-col p-0 rounded-2xl gap-0 border-slate-200 shadow-2xl">
+        <DialogContent className="max-w-5xl w-[90vw] max-h-[90vh] h-[90vh] overflow-hidden flex flex-col p-0 rounded-2xl gap-0 border-slate-200 shadow-2xl" onPointerDown={(e) => e.stopPropagation()}>
           <div className="flex flex-1 overflow-hidden">
             {/* Lado Esquerdo - Email Viewer */}
             <div className="flex-1 flex flex-col min-w-0 border-r border-slate-200">
@@ -261,7 +338,6 @@ export function EmailViewer({
                     {email.subject || "(Sem assunto)"}
                   </DialogTitle>
 
-                  {/* Botão para abrir tarefas em mobile ou toggle */}
                   <Button
                     variant="outline"
                     size="sm"
@@ -277,19 +353,16 @@ export function EmailViewer({
 
                 <div className="flex flex-col gap-3 text-sm">
                   <div className="flex items-center gap-2">
-                    <div className="h-8 w-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0">
-                      {email.from?.emailAddress?.name
-                        ?.charAt(0)
-                        .toUpperCase() ||
-                        email.from?.emailAddress?.address
-                          ?.charAt(0)
-                          .toUpperCase() ||
-                        "M"}
-                    </div>
+                    {/* A FOTO REAL VAI ENTRAR AQUI SE EXISTIR (imageUrl={avatarUrl}) */}
+                    <UserAvatar 
+                      name={email.from?.emailAddress?.name} 
+                      email={email.from?.emailAddress?.address || ""} 
+                      imageUrl={avatarUrl}
+                      className="h-10 w-10 shrink-0 shadow-sm"
+                    />
                     <div className="flex flex-col leading-tight">
                       <span className="font-bold text-slate-800">
-                        {email.from?.emailAddress?.name ||
-                          email.from?.emailAddress?.address}
+                        {email.from?.emailAddress?.name || email.from?.emailAddress?.address}
                       </span>
                       <span className="text-xs text-slate-500">
                         {email.from?.emailAddress?.address}
@@ -301,33 +374,28 @@ export function EmailViewer({
                     </div>
                   </div>
 
-                  {fullEmail?.toRecipients &&
-                    fullEmail.toRecipients.length > 0 && (
-                      <div className="flex items-start gap-2 ml-10">
-                        <Users className="h-3.5 w-3.5 text-slate-400 mt-0.5 shrink-0" />
-                        <div className="flex-1 flex flex-wrap gap-1">
-                          <span className="text-slate-400 text-xs font-semibold mr-1 mt-0.5 uppercase tracking-wider">
-                            Para:
+                  {fullEmail?.toRecipients && fullEmail.toRecipients.length > 0 && (
+                    <div className="flex items-start gap-2 ml-10">
+                      <Users className="h-3.5 w-3.5 text-slate-400 mt-0.5 shrink-0" />
+                      <div className="flex-1 flex flex-wrap gap-1">
+                        <span className="text-slate-400 text-xs font-semibold mr-1 mt-0.5 uppercase tracking-wider">
+                          Para:
+                        </span>
+                        {fullEmail.toRecipients.map((recipient, index) => (
+                          <span
+                            key={index}
+                            className="text-xs text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100"
+                          >
+                            {recipient.emailAddress.name || recipient.emailAddress.address}
                           </span>
-                          {fullEmail.toRecipients.map((recipient, index) => (
-                            <span
-                              key={index}
-                              className="text-xs text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100"
-                            >
-                              {recipient.emailAddress.name ||
-                                recipient.emailAddress.address}
-                            </span>
-                          ))}
-                        </div>
+                        ))}
                       </div>
-                    )}
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-2 flex-wrap ml-10 mt-1">
                     {!email.isRead && (
-                      <Badge
-                        variant="default"
-                        className="text-[10px] uppercase bg-blue-600"
-                      >
+                      <Badge variant="default" className="text-[10px] uppercase bg-blue-600">
                         Nova Mensagem
                       </Badge>
                     )}
@@ -335,10 +403,9 @@ export function EmailViewer({
                     {metadata?.priority && (
                       <Badge
                         variant="outline"
-                        className={`text-[10px] font-bold ${priorityColors[metadata.priority]}`}
+                        className={`text-[10px] font-bold ${priorityColors[metadata.priority as keyof typeof priorityColors]}`}
                       >
-                        {priorityIcons[metadata.priority]}{" "}
-                        {metadata.priority.toUpperCase()}
+                        {priorityIcons[metadata.priority as keyof typeof priorityIcons]} {metadata.priority.toUpperCase()}
                       </Badge>
                     )}
 
@@ -360,14 +427,14 @@ export function EmailViewer({
               </DialogHeader>
 
               <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50/30">
-                {fullEmail?.attachments && fullEmail.attachments.length > 0 && (
+                {visibleAttachments.length > 0 && (
                   <div className="px-8 py-4 border-b border-slate-100 bg-white">
                     <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-2">
                       <Paperclip className="h-3.5 w-3.5" />
-                      Anexos ({fullEmail.attachments.length})
+                      Anexos ({visibleAttachments.length})
                     </h4>
                     <div className="flex flex-wrap gap-3">
-                      {fullEmail.attachments.map((attachment, index) => (
+                      {visibleAttachments.map((attachment: any, index: number) => (
                         <div
                           key={index}
                           onClick={() => handleDownloadAttachment(attachment)}

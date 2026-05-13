@@ -9,7 +9,6 @@ interface UserAvatarProps {
   className?: string;
 }
 
-// Função para gerar uma cor de fundo consistente baseada no email
 const stringToColor = (str: string) => {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -19,7 +18,6 @@ const stringToColor = (str: string) => {
   return "#" + "00000".substring(0, 6 - c.length) + c;
 };
 
-// Função para extrair as iniciais (ex: "Gonçalo Ferreira" -> "GF")
 const getInitials = (name?: string | null, email?: string) => {
   if (name) {
     const names = name.split(" ");

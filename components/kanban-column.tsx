@@ -41,13 +41,6 @@ interface KanbanColumnProps {
   onToggleCollapse?: () => void;
 }
 
-const priorityWeights: Record<string, number> = {
-  urgente: 4,
-  alta: 3,
-  media: 2,
-  baixa: 1,
-};
-
 export function KanbanColumn({
   id,
   title,
@@ -108,21 +101,7 @@ export function KanbanColumn({
   }, [threads, emailsMetadata]);
 
   const groupedThreads = useMemo(() => {
-    const getThreadHighestPriority = (thread: EmailThread) => {
-      let highest = 1;
-      thread.emails.forEach((email) => {
-        const priority = emailsMetadata[email.id]?.priority;
-        if (priority && priorityWeights[priority] > highest) {
-          highest = priorityWeights[priority];
-        }
-      });
-      return highest;
-    };
-
     const sortedThreads = [...activeThreads].sort((a, b) => {
-      const weightA = getThreadHighestPriority(a);
-      const weightB = getThreadHighestPriority(b);
-      if (weightA !== weightB) return weightB - weightA;
       return (
         new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime()
       );
@@ -160,7 +139,7 @@ export function KanbanColumn({
     });
 
     return groups;
-  }, [activeThreads, emailsMetadata]);
+  }, [activeThreads]);
 
   const activeGroups = Object.entries(groupedThreads).filter(
     ([_, groupThreads]) => groupThreads.length > 0,
@@ -185,7 +164,6 @@ export function KanbanColumn({
             {title}
           </h3>
         </div>
-        {/* Mostra apenas a conta dos ATIVOS na vista colapsada */}
         <Badge variant="secondary" className={`${color} text-[10px] px-1 mb-2`}>
           {activeThreads.length}
         </Badge>
@@ -301,7 +279,7 @@ export function KanbanColumn({
               activeGroups.map(([groupName, groupThreads]) => (
                 <div key={groupName} className="mb-6 last:mb-0">
                   <div className="sticky top-0 z-20 bg-slate-50/50 backdrop-blur-sm py-2 mb-3 mt-4 first:mt-0 border-b border-slate-100">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 pl-3">
                       {groupName}
                       <span className="h-px bg-slate-200 flex-1"></span>
                     </h4>
