@@ -24,6 +24,7 @@ import {
   Pencil,
   Trash2,
   ListTodo,
+  Archive
 } from "lucide-react";
 import { useAuth } from "./auth-provider";
 import { GraphService, type Email } from "@/lib/microsoft-graph";
@@ -41,6 +42,7 @@ interface EmailViewerProps {
   onOpenSettings: () => void;
   onUpdateMetadata: (emailId: string, updates: Partial<EmailMetadata>) => void;
   onEmailSent?: () => void;
+  hideArchiveButton?: boolean;
 }
 
 const priorityColors = {
@@ -64,6 +66,7 @@ export function EmailViewer({
   onClose,
   onUpdateMetadata,
   onEmailSent,
+  hideArchiveButton,
 }: EmailViewerProps) {
   const { accessToken } = useAuth();
   const { toast } = useToast();
@@ -73,7 +76,7 @@ export function EmailViewer({
     "reply" | "replyAll" | "forward" | null
   >(null);
 
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null); // ESTADO PARA GUARDAR A FOTO
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [subtasks, setSubtasks] = useState<Subtask[]>(metadata?.subtasks || []);
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [newTaskText, setNewTaskText] = useState("");
@@ -130,6 +133,31 @@ export function EmailViewer({
       });
     } catch (error) {
       console.error("Erro ao marcar email como lido:", error);
+    }
+  };
+
+  const handleArchive = async () => {
+    if (!accessToken || !email.id) return;
+
+    try {
+      const graphService = new GraphService(accessToken);
+      
+      await graphService.moveToFolder(email.id, "archive");
+
+      toast({
+        title: "Email arquivado",
+        description: "A mensagem foi movida para o arquivo.",
+      });
+
+      if (onEmailSent) onEmailSent();
+      onClose();
+    } catch (error) {
+      console.error("Erro ao arquivar email:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível arquivar o email.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -268,7 +296,6 @@ export function EmailViewer({
     );
   };
 
-  // Efeito combinado: Carrega o email E a fotografia de quem o enviou!
   useEffect(() => {
     if (isOpen && email.id) {
       loadFullEmail();
@@ -279,7 +306,6 @@ export function EmailViewer({
         if (!accessToken || !email.from?.emailAddress?.address) return;
         try {
           const address = email.from.emailAddress.address;
-          // Pede diretamente a foto real à Microsoft
           const res = await fetch(`https://graph.microsoft.com/v1.0/users/${address}/photo/$value`, {
             headers: { Authorization: `Bearer ${accessToken}` },
           });
@@ -290,7 +316,7 @@ export function EmailViewer({
             setAvatarUrl(objectUrl);
           }
         } catch (err) {
-          // Se falhar (como em contas do hotmail), falha de forma invisível. O UserAvatar toma conta do recado!
+          // Ignorar silenciosamente
         }
       };
 
@@ -353,7 +379,6 @@ export function EmailViewer({
 
                 <div className="flex flex-col gap-3 text-sm">
                   <div className="flex items-center gap-2">
-                    {/* A FOTO REAL VAI ENTRAR AQUI SE EXISTIR (imageUrl={avatarUrl}) */}
                     <UserAvatar 
                       name={email.from?.emailAddress?.name} 
                       email={email.from?.emailAddress?.address || ""} 
@@ -513,6 +538,18 @@ export function EmailViewer({
                       Marcar como lido
                     </Button>
                   )}
+                  
+                  {!hideArchiveButton && (
+                    <Button
+                      variant="ghost"
+                      className="rounded-xl text-amber-600 hover:bg-amber-50 font-medium"
+                      onClick={handleArchive}
+                    >
+                      <Archive className="h-4 w-4 mr-2" />
+                      Arquivar
+                    </Button>
+                  )}
+
                   <Button
                     variant="ghost"
                     onClick={onClose}
@@ -691,7 +728,13 @@ export function EmailViewer({
           onClose={() => setComposerMode(null)}
           mode={composerMode}
           originalEmail={fullEmail || email}
-          onEmailSent={onEmailSent}
+          onEmailSent={() => {
+            setComposerMode(null);
+            onClose();
+            if (onEmailSent) {
+              onEmailSent();
+            }
+          }}
         />
       )}
     </>

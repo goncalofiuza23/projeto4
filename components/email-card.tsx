@@ -238,6 +238,11 @@ export function EmailCard({
         onClose={() => setIsViewDialogOpen(false)}
         onOpenSettings={() => setIsDialogOpen(true)}
         onUpdateMetadata={onUpdateMetadata}
+        hideArchiveButton={
+          email.folderType === "archive" || 
+          (typeof window !== "undefined" && window.location.href.toLowerCase().includes("arquivad")) ||
+          JSON.stringify(metadata || {}).toLowerCase().includes("arquivad")
+        }
       />
     </div>
   );
