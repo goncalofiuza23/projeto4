@@ -92,7 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error: any) {
       if (error.errorCode === "interaction_in_progress") {
         clearMsalStuckStatus();
-        window.location.reload(); // Se estiver preso, recarrega
+        window.location.reload();
       }
       console.error("Login cancelado ou erro:", error);
     } finally {

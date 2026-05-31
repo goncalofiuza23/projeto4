@@ -58,6 +58,7 @@ interface EmailComposerProps {
   mode: "new" | "reply" | "replyAll" | "forward";
   originalEmail?: Email;
   onEmailSent?: () => void;
+  onSendStart?: () => void;
 }
 
 export function EmailComposer({
@@ -66,6 +67,7 @@ export function EmailComposer({
   mode,
   originalEmail,
   onEmailSent,
+  onSendStart,
 }: EmailComposerProps) {
   const { accessToken } = useAuth();
   const { toast } = useToast();
@@ -114,7 +116,6 @@ export function EmailComposer({
     }
 
     let subject = originalEmail.subject || "";
-    // O body Content começa sempre limpo para nós escrevermos apenas a resposta nova!
     let bodyContent = ""; 
 
     switch (mode) {
@@ -178,7 +179,11 @@ export function EmailComposer({
   };
 
   const handleSend = async () => {
-    if (!accessToken) return;
+    if (!accessToken || isLoading) return;
+    
+    setIsLoading(true);
+
+    if (onSendStart) onSendStart();
 
     onClose();
 

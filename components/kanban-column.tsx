@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useDroppable, useDndContext } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -20,6 +20,7 @@ import {
   Inbox,
   Clock,
   ChevronDown,
+  Loader2,
 } from "lucide-react";
 import {
   Collapsible,
@@ -39,6 +40,7 @@ interface KanbanColumnProps {
   onEmailSent?: () => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  onLoadMore?: () => void;
 }
 
 export function KanbanColumn({
@@ -53,11 +55,14 @@ export function KanbanColumn({
   onEmailSent,
   isCollapsed,
   onToggleCollapse,
+  onLoadMore,
 }: KanbanColumnProps) {
   const { over } = useDndContext();
   const { setNodeRef, isOver } = useDroppable({ id });
 
   const [isSnoozedOpen, setIsSnoozedOpen] = useState(false);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const isOverCardInColumn = threads.some((t) => t.id === over?.id);
   const isDropTarget = isOver || isOverCardInColumn || over?.id === id;
@@ -145,6 +150,28 @@ export function KanbanColumn({
     ([_, groupThreads]) => groupThreads.length > 0,
   );
 
+  useEffect(() => {
+    if (!onLoadMore || activeThreads.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !isFetchingMore) {
+          setIsFetchingMore(true);
+          onLoadMore();
+          
+          setTimeout(() => setIsFetchingMore(false), 2000);
+        }
+      },
+      { rootMargin: "100px" }
+    );
+
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [onLoadMore, activeThreads.length, isFetchingMore]);
+
   if (isCollapsed) {
     return (
       <div
@@ -206,7 +233,7 @@ export function KanbanColumn({
         <div
           ref={setNodeRef}
           data-column-id={id}
-          className={`flex-1 min-h-[70vh] pb-32 rounded-xl transition-all duration-300 ${isDropTarget ? "bg-blue-50/50 ring-2 ring-blue-400/20 ring-offset-2 bg-opacity-40" : ""}`}
+          className={`flex-1 min-h-[70vh] rounded-xl transition-all duration-300 ${isDropTarget ? "bg-blue-50/50 ring-2 ring-blue-400/20 ring-offset-2 bg-opacity-40" : ""}`}
         >
           {snoozedThreads.length > 0 && (
             <Collapsible
@@ -276,30 +303,44 @@ export function KanbanColumn({
                 </p>
               </div>
             ) : (
-              activeGroups.map(([groupName, groupThreads]) => (
-                <div key={groupName} className="mb-6 last:mb-0">
-                  <div className="sticky top-0 z-20 bg-slate-50/50 backdrop-blur-sm py-2 mb-3 mt-4 first:mt-0 border-b border-slate-100">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 pl-3">
-                      {groupName}
-                      <span className="h-px bg-slate-200 flex-1"></span>
-                    </h4>
-                  </div>
+              <>
+                {activeGroups.map(([groupName, groupThreads]) => (
+                  <div key={groupName} className="mb-6 last:mb-0">
+                    <div className="sticky top-0 z-20 bg-slate-50/50 backdrop-blur-sm py-2 mb-3 mt-4 first:mt-0 border-b border-slate-100">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 pl-3">
+                        {groupName}
+                        <span className="h-px bg-slate-200 flex-1"></span>
+                      </h4>
+                    </div>
 
-                  <div className="space-y-3">
-                    {groupThreads.map((thread) => (
-                      <SortableThreadCard
-                        key={thread.id}
-                        thread={thread}
-                        columnId={id}
-                        emailsMetadata={emailsMetadata}
-                        onUpdateMetadata={onUpdateMetadata}
-                        onThreadUpdated={onThreadUpdated}
-                        onEmailSent={onEmailSent}
-                      />
-                    ))}
+                    <div className="space-y-3">
+                      {groupThreads.map((thread) => (
+                        <SortableThreadCard
+                          key={thread.id}
+                          thread={thread}
+                          columnId={id}
+                          emailsMetadata={emailsMetadata}
+                          onUpdateMetadata={onUpdateMetadata}
+                          onThreadUpdated={onThreadUpdated}
+                          onEmailSent={onEmailSent}
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))
+                ))}
+                
+                {/* 👇 3. O DETETOR INVISÍVEL (ou Spinner) NO FUNDO 👇 */}
+                {activeThreads.length > 0 && (
+                  <div ref={loadMoreRef} className="py-6 flex justify-center pb-24">
+                    {isFetchingMore && (
+                      <div className="flex items-center gap-2 text-slate-400 bg-white px-4 py-2 rounded-full shadow-sm border border-slate-100">
+                        <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                        <span className="text-xs font-medium">A carregar mais...</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </SortableContext>
         </div>

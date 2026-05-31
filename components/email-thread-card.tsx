@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, memo } from "react";
+import { useState, useEffect, memo, useMemo } from "react";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -101,6 +101,20 @@ export const EmailThreadCard = memo(function EmailThreadCard({
   const [isMoving, setIsMoving] = useState(false);
   const [isVisuallyHidden, setIsVisuallyHidden] = useState(false);
 
+  const uniqueEmails = useMemo(() => {
+    const seen = new Set();
+    return thread.emails.filter((email) => {
+      let key = email.internetMessageId;
+      if (!key) {
+        const timeStr = email.receivedDateTime ? email.receivedDateTime.substring(0, 16) : ""; 
+        key = `${email.bodyPreview?.substring(0, 30)}-${email.from?.emailAddress?.address}-${timeStr}`;
+      }
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [thread.emails]);
+
   const formatDateShort = (dateString: string) => {
     const date = new Date(dateString);
     const today = new Date();
@@ -120,17 +134,15 @@ export const EmailThreadCard = memo(function EmailThreadCard({
     return `${thread.participants[0]} +${thread.participants.length - 1}`;
   };
 
-  // Garante que encontramos o primeiro e-mail da thread (o pedido original)
-  const originalEmail = thread.emails.reduce((oldest, current) => 
+  const originalEmail = uniqueEmails.reduce((oldest, current) => 
     new Date(current.receivedDateTime).getTime() < new Date(oldest.receivedDateTime).getTime() ? current : oldest
   );
 
-  // E a última resposta (para podermos abrir a mensagem mais recente ao clicar no card)
-  const latestEmail = thread.emails.reduce((newest, current) => 
+  const latestEmail = uniqueEmails.reduce((newest, current) => 
     new Date(current.receivedDateTime).getTime() > new Date(newest.receivedDateTime).getTime() ? current : newest
   );
 
-  const hasAttachments = thread.emails.some((e) => e.hasAttachments);
+  const hasAttachments = uniqueEmails.some((e) => e.hasAttachments);
   const isUnread = thread.hasUnread;
 
   const priorities = ["urgente", "alta", "media", "baixa"];
@@ -138,7 +150,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
   let snoozedUntilDate: string | null = null;
   let subtasks: Subtask[] = [];
 
-  thread.emails.forEach((e) => {
+  uniqueEmails.forEach((e) => {
     const metadata = emailsMetadata[e.id];
     if (metadata?.priority) {
       const currentIndex = priorities.indexOf(metadata.priority);
@@ -160,7 +172,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
     : false;
 
   const selectedEmailData = selectedEmail
-    ? thread.emails.find((e) => e.id === selectedEmail)
+    ? uniqueEmails.find((e) => e.id === selectedEmail)
     : null;
 
   const completedTasksCount = subtasks.filter((t) => t.completed).length;
@@ -169,17 +181,16 @@ export const EmailThreadCard = memo(function EmailThreadCard({
     totalTasks > 0 && completedTasksCount === totalTasks;
 
   useEffect(() => {
-    const firstEmailMetadata = emailsMetadata[thread.emails[0]?.id];
+    const firstEmailMetadata = emailsMetadata[uniqueEmails[0]?.id];
     if (firstEmailMetadata) {
       setPriority(firstEmailMetadata.priority || "media");
       setTags(firstEmailMetadata.tags || []);
     }
-  }, [emailsMetadata, thread.emails]);
+  }, [emailsMetadata, uniqueEmails]);
 
   useEffect(() => {
     let isMounted = true;
     const fetchSenderPhoto = async () => {
-      // Agora vamos buscar a foto do Remetente Original, e não de quem respondeu em último
       const senderEmail = originalEmail.from?.emailAddress?.address;
       if (!accessToken || !senderEmail) return;
       try {
@@ -222,7 +233,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
     if (newTag.trim() && !tags.includes(newTag.trim())) {
       const updatedTags = [...tags, newTag.trim()];
       setTags(updatedTags);
-      thread.emails.forEach((e) => {
+      uniqueEmails.forEach((e) => {
         onUpdateMetadata(e.id, { tags: updatedTags });
       });
       setNewTag("");
@@ -232,14 +243,14 @@ export const EmailThreadCard = memo(function EmailThreadCard({
   const handleRemoveTag = (tagToRemove: string) => {
     const updatedTags = tags.filter((tag) => tag !== tagToRemove);
     setTags(updatedTags);
-    thread.emails.forEach((e) => {
+    uniqueEmails.forEach((e) => {
       onUpdateMetadata(e.id, { tags: updatedTags });
     });
   };
 
   const handlePriorityChange = (newPriority: string) => {
     setPriority(newPriority as EmailMetadata["priority"]);
-    thread.emails.forEach((e) => {
+    uniqueEmails.forEach((e) => {
       onUpdateMetadata(e.id, {
         priority: newPriority as EmailMetadata["priority"],
       });
@@ -248,7 +259,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
 
   const applySnooze = (date: Date) => {
     setIsVisuallyHidden(true);
-    thread.emails.forEach((e) => {
+    uniqueEmails.forEach((e) => {
       onUpdateMetadata(e.id, { snoozed_until: date.toISOString() });
     });
     setIsSnoozeModalOpen(false);
@@ -286,7 +297,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
 
   const cancelSnooze = () => {
     setIsVisuallyHidden(true);
-    thread.emails.forEach((e) => {
+    uniqueEmails.forEach((e) => {
       onUpdateMetadata(e.id, { snoozed_until: null });
     });
     toast({
@@ -302,9 +313,9 @@ export const EmailThreadCard = memo(function EmailThreadCard({
     try {
       const graphService = new GraphService(accessToken);
       await Promise.all(
-        thread.emails.map((e) => graphService.moveToFolder(e.id, "archive")),
+        uniqueEmails.map((e) => graphService.moveToFolder(e.id, "archive")),
       );
-      thread.emails.forEach((e) => onUpdateMetadata(e.id, { column_id: null }));
+      uniqueEmails.forEach((e) => onUpdateMetadata(e.id, { column_id: "archive" }));
       toast({
         title: "Conversa Arquivada",
         description: "Movida para a pasta de Arquivo do Outlook.",
@@ -331,7 +342,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
     try {
       const graphService = new GraphService(accessToken);
       await Promise.all(
-        thread.emails.map((e) => graphService.moveToFolder(e.id, "inbox")),
+        uniqueEmails.map((e) => graphService.moveToFolder(e.id, "inbox")),
       );
       toast({
         title: "Restaurado",
@@ -359,9 +370,9 @@ export const EmailThreadCard = memo(function EmailThreadCard({
     try {
       const graphService = new GraphService(accessToken);
       await Promise.all(
-        thread.emails.map((e) => graphService.moveToFolder(e.id, "junkemail")),
+        uniqueEmails.map((e) => graphService.moveToFolder(e.id, "junkemail")),
       );
-      thread.emails.forEach((e) => onUpdateMetadata(e.id, { column_id: null }));
+      uniqueEmails.forEach((e) => onUpdateMetadata(e.id, { column_id: "spam" }));
       toast({
         title: "Spam",
         description: "Conversa movida para Lixo Eletrónico.",
@@ -394,7 +405,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
       const graphService = new GraphService(accessToken);
       if (isDeletedView) {
         await Promise.all(
-          thread.emails.map((e) => graphService.deleteMessage(e.id)),
+          uniqueEmails.map((e) => graphService.deleteMessage(e.id)),
         );
         toast({
           title: "Eliminado Definitivamente",
@@ -402,13 +413,11 @@ export const EmailThreadCard = memo(function EmailThreadCard({
         });
       } else {
         await Promise.all(
-          thread.emails.map((e) =>
+          uniqueEmails.map((e) =>
             graphService.moveToFolder(e.id, "deleteditems"),
           ),
         );
-        thread.emails.forEach((e) =>
-          onUpdateMetadata(e.id, { column_id: null }),
-        );
+        uniqueEmails.forEach((e) => onUpdateMetadata(e.id, { column_id: "deleted" }));
         toast({
           title: "Eliminado",
           description: "Conversa movida para os Itens Eliminados.",
@@ -447,7 +456,6 @@ export const EmailThreadCard = memo(function EmailThreadCard({
             className="p-4 pb-3 cursor-pointer relative flex flex-col"
             onClick={(e) => {
               e.stopPropagation();
-              // Abre sempre o mais recente para leres a última resposta
               setSelectedEmail(latestEmail.id);
               if (!latestEmail.isRead) handleMarkAsRead(latestEmail.id);
             }}
@@ -555,7 +563,6 @@ export const EmailThreadCard = memo(function EmailThreadCard({
 
             <div className="flex gap-3 pr-8 w-full">
               <div className="flex flex-col items-center gap-2 mt-1">
-                {/* Mostra a foto e informações de quem enviou o primeiro e-mail */}
                 <UserAvatar
                   name={originalEmail.from?.emailAddress?.name}
                   email={originalEmail.from?.emailAddress?.address || ""}
@@ -591,17 +598,16 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                   }`}
                 >
                   {thread.subject}
-                  {thread.totalEmails > 1 && (
+                  {uniqueEmails.length > 1 && (
                     <Badge
                       variant="secondary"
                       className="ml-2 text-[10px] px-1.5 py-0 h-4 bg-slate-100 text-slate-500 align-middle"
                     >
-                      {thread.totalEmails} msg
+                      {uniqueEmails.length} msg
                     </Badge>
                   )}
                 </h3>
 
-                {/* Agora o texto de resumo do card é baseado no e-mail original */}
                 <p className="text-xs line-clamp-2 text-slate-500 leading-relaxed pr-2">
                   {originalEmail.bodyPreview}
                 </p>
@@ -611,7 +617,6 @@ export const EmailThreadCard = memo(function EmailThreadCard({
 
           <div className="px-4 pb-3 flex items-center justify-between mt-auto">
             <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
-              {/* Checklist Badge Summary */}
               {totalTasks > 0 && (
                 <div
                   className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold border transition-colors ${
@@ -675,7 +680,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
           <CollapsibleContent className="space-y-0 px-2 pb-2">
             <div className="bg-slate-50 rounded-xl p-2 border border-slate-100 mt-2">
               <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-                {thread.emails.map((item) => (
+                {uniqueEmails.map((item) => (
                   <div
                     key={item.id}
                     className={`flex items-start gap-2 p-2 rounded-lg transition-colors cursor-pointer border ${
@@ -693,7 +698,6 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                       name={item.from?.emailAddress?.name}
                       email={item.from?.emailAddress?.address || ""}
                       imageUrl={
-                        // Mostra a foto no histórico se for a pessoa original
                         item.from?.emailAddress?.address ===
                         originalEmail.from?.emailAddress?.address
                           ? avatarUrl
@@ -887,6 +891,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
           onOpenSettings={() => setIsSettingsOpen(true)}
           onUpdateMetadata={onUpdateMetadata}
           onEmailSent={onEmailSent}
+          hideArchiveButton={isArchivedView || selectedEmailData.folderType === "archive"}
         />
       )}
     </>

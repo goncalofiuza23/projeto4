@@ -316,7 +316,6 @@ export function EmailViewer({
             setAvatarUrl(objectUrl);
           }
         } catch (err) {
-          // Ignorar silenciosamente
         }
       };
 
@@ -350,6 +349,12 @@ export function EmailViewer({
     
     return true;
   }) || [];
+
+  const isEmailArchived = 
+    hideArchiveButton || 
+    email.folderType === "archive" || 
+    metadata?.column_id === "archive" || 
+    metadata?.column_id === "arquivados";
 
   return (
     <>
@@ -539,7 +544,8 @@ export function EmailViewer({
                     </Button>
                   )}
                   
-                  {!hideArchiveButton && (
+                  {/* 👇 USA A NOSSA NOVA VARIÁVEL isEmailArchived AQUI 👇 */}
+                  {!isEmailArchived && !composerMode && (
                     <Button
                       variant="ghost"
                       className="rounded-xl text-amber-600 hover:bg-amber-50 font-medium"
@@ -728,9 +734,11 @@ export function EmailViewer({
           onClose={() => setComposerMode(null)}
           mode={composerMode}
           originalEmail={fullEmail || email}
-          onEmailSent={() => {
+          onSendStart={() => {
             setComposerMode(null);
-            onClose();
+            onClose(); 
+          }}
+          onEmailSent={() => {
             if (onEmailSent) {
               onEmailSent();
             }

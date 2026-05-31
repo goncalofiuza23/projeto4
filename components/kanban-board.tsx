@@ -60,6 +60,8 @@ export function KanbanBoard() {
   const [activeView, setActiveView] = useState("kanban");
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
+  const [emailLimit, setEmailLimit] = useState(50);
+
   const [filters, setFilters] = useState<EmailFilters>({
     search: "",
     sender: "",
@@ -139,7 +141,7 @@ export function KanbanBoard() {
     } catch (error) {}
   };
 
-  const loadEmails = async (isBackground = false) => {
+  const loadEmails = async (isBackground = false, currentLimit = emailLimit) => {
     if (!accessToken || !account) return;
 
     if (!isBackground) {
@@ -148,13 +150,12 @@ export function KanbanBoard() {
 
     try {
       const graphService = new GraphService(accessToken);
-      const fetchedEmails = await graphService.getAllEmails(100);
-      setEmails(fetchedEmails);
-      const emailThreads = graphService.groupEmailsIntoThreads(fetchedEmails);
-      setThreads(emailThreads);
+      
+      const fetchedEmailsPromise = graphService.getAllEmails(currentLimit);
 
+      let metadataPromise = Promise.resolve(null as any);
       if (isSupabaseAvailable()) {
-        const metadata = await safeSupabaseOperation(async () => {
+        metadataPromise = safeSupabaseOperation(async () => {
           const { data, error } = await supabase!
             .from("email_metadata")
             .select("*")
@@ -162,17 +163,30 @@ export function KanbanBoard() {
           if (error) throw error;
           return data;
         }, []);
-        const metadataMap: Record<string, EmailMetadata> = {};
-        metadata?.forEach((meta) => {
+      }
+
+      const [fetchedEmails, metadata] = await Promise.all([
+        fetchedEmailsPromise,
+        metadataPromise
+      ]);
+
+      const metadataMap: Record<string, EmailMetadata> = {};
+      const allTags = new Set<string>();
+
+      if (metadata) {
+        metadata.forEach((meta: any) => {
           metadataMap[meta.email_id] = meta;
-        });
-        setEmailsMetadata(metadataMap);
-        const allTags = new Set<string>();
-        metadata?.forEach((meta) => {
-          meta.tags.forEach((tag: string) => allTags.add(tag));
+          meta.tags?.forEach((tag: string) => allTags.add(tag));
         });
         setAvailableTags(Array.from(allTags));
       }
+
+      const emailThreads = graphService.groupEmailsIntoThreads(fetchedEmails);
+
+      setEmails(fetchedEmails);
+      setThreads(emailThreads);
+      setEmailsMetadata(metadataMap);
+
     } catch (e) {
       if (!isBackground) setError("Erro ao carregar");
     } finally {
@@ -259,34 +273,39 @@ export function KanbanBoard() {
   };
 
   const getThreadsByColumn = (columnId: string) => {
-    return filteredThreads.filter((t) =>
-      t.emails.some((e) => {
+    return filteredThreads.filter((t) => {
+      let threadColumn = "inbox";
+      
+      for (const e of t.emails) {
         const meta = emailsMetadata[e.id];
-        return columnId === "inbox"
-          ? !meta?.column_id
-          : meta?.column_id === columnId;
-      }),
-    );
+        if (meta?.column_id && !["archive", "spam", "deleted"].includes(meta.column_id)) {
+          threadColumn = meta.column_id;
+          break; 
+        }
+      }
+      
+      return threadColumn === columnId;
+    });
   };
 
   useEffect(() => {
     let filtered = [...threads];
 
-    if (activeView === "kanban" || activeView.startsWith("col_")) {
+    if (activeView === "kanban") {
       filtered = filtered.filter((t) => {
-        if (activeView === "kanban") {
-          const isArchivedSpamOrDeleted = t.emails.some((e) =>
-            ["archive", "spam", "deleted"].includes(e.folderType || ""),
-          );
-          if (isArchivedSpamOrDeleted) return false;
+        const isArchivedSpamOrDeleted = t.emails.some((e) => {
+          const isFolderArchived = ["archive", "spam", "deleted", "junkemail", "deleteditems"].includes(e.folderType || "");
+          const isMetadataArchived = ["archive", "spam", "deleted"].includes(emailsMetadata[e.id]?.column_id || "");
+          return isFolderArchived || isMetadataArchived;
+        });
+        
+        if (isArchivedSpamOrDeleted) return false;
 
-          const isOnlyFromMe = t.emails.every((e) => e.isFromMe);
-          const hasColumn = t.emails.some(
-            (e) => emailsMetadata[e.id]?.column_id,
-          );
-          return !(isOnlyFromMe && !hasColumn);
-        }
-        return true;
+        const isOnlyFromMe = t.emails.every((e) => e.isFromMe);
+        const hasColumn = t.emails.some(
+          (e) => emailsMetadata[e.id]?.column_id && !["archive", "spam", "deleted"].includes(emailsMetadata[e.id]?.column_id || ""),
+        );
+        return !(isOnlyFromMe && !hasColumn);
       });
     }
 
@@ -367,16 +386,21 @@ export function KanbanBoard() {
 
   useEffect(() => {
     if (accessToken && account && !authLoading) {
-      loadEmails(false);
-      loadCustomColumns();
+      loadEmails(false, emailLimit);
 
       const pollingInterval = setInterval(() => {
-        loadEmails(true);
+        loadEmails(true, emailLimit);
       }, 15000);
 
       return () => clearInterval(pollingInterval);
     }
-  }, [accessToken, account, authLoading]);
+  }, [accessToken, account, authLoading, emailLimit]);
+
+  useEffect(() => {
+    if (accessToken && account && !authLoading && !isInitialLoad) {
+      loadEmails(true, emailLimit); 
+    }
+  }, [activeView]);
 
   if (authLoading)
     return (
@@ -421,6 +445,7 @@ export function KanbanBoard() {
                   onEmailSent={() => loadEmails(true)}
                   isCollapsed={collapsedColumns.includes(column.id)}
                   onToggleCollapse={() => handleToggleCollapse(column.id)}
+                  onLoadMore={() => setEmailLimit((prev) => prev + 50)}
                 />
               ))}
               <div className="shrink-0 w-4 h-full opacity-0 pointer-events-none" />
@@ -458,9 +483,6 @@ export function KanbanBoard() {
               <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
                 {column?.title || "Coluna Desconhecida"}
               </h2>
-              <p className="text-sm text-slate-500 font-medium">
-                Focus Mode: Limpe a sua lista sem distrações.
-              </p>
             </div>
             <Badge
               variant="secondary"
@@ -515,10 +537,6 @@ export function KanbanBoard() {
               <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
                 Adiados (Snooze)
               </h2>
-              <p className="text-sm text-slate-500 font-medium">
-                E-mails a descansar. Vão reaparecer no Kanban na data
-                programada.
-              </p>
             </div>
             <Badge
               variant="secondary"
@@ -557,7 +575,7 @@ export function KanbanBoard() {
 
     if (activeView === "archived") {
       const archivedThreads = threads.filter((t) =>
-        t.emails.some((e) => e.folderType === "archive"),
+        t.emails.some((e) => e.folderType === "archive" || emailsMetadata[e.id]?.column_id === "archive"),
       );
 
       return (
@@ -568,11 +586,8 @@ export function KanbanBoard() {
             </div>
             <div>
               <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
-                Arquivo Oficial
+                Arquivo
               </h2>
-              <p className="text-sm text-slate-500 font-medium">
-                Estes e-mails estão na sua pasta de Arquivo do Outlook.
-              </p>
             </div>
             <Badge
               variant="secondary"
@@ -624,9 +639,6 @@ export function KanbanBoard() {
               <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
                 Enviados
               </h2>
-              <p className="text-sm text-slate-500 font-medium">
-                E-mails que enviou com sucesso.
-              </p>
             </div>
             <Badge
               variant="secondary"
@@ -664,7 +676,7 @@ export function KanbanBoard() {
 
     if (activeView === "deleted") {
       const deletedThreads = threads.filter((t) =>
-        t.emails.some((e) => e.folderType === "deleted"),
+        t.emails.some((e) => e.folderType === "deleted" || emailsMetadata[e.id]?.column_id === "deleted"),
       );
 
       return (
@@ -677,9 +689,6 @@ export function KanbanBoard() {
               <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
                 Eliminados
               </h2>
-              <p className="text-sm text-slate-500 font-medium">
-                Os seus itens eliminados.
-              </p>
             </div>
             <Badge
               variant="secondary"
@@ -718,7 +727,7 @@ export function KanbanBoard() {
 
     if (activeView === "spam") {
       const spamThreads = threads.filter((t) =>
-        t.emails.some((e) => e.folderType === "spam"),
+        t.emails.some((e) => e.folderType === "spam" || emailsMetadata[e.id]?.column_id === "spam"),
       );
 
       return (
@@ -731,9 +740,6 @@ export function KanbanBoard() {
               <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
                 Lixo Eletrónico
               </h2>
-              <p className="text-sm text-slate-500 font-medium">
-                E-mails marcados como Spam.
-              </p>
             </div>
             <Badge
               variant="secondary"

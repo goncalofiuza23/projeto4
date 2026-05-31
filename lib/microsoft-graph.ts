@@ -162,14 +162,6 @@ export class GraphService {
         errorMessage = errorText || errorMessage;
       }
 
-      if (
-        response.status === 404 &&
-        options.method === "POST" &&
-        url.includes("/move")
-      ) {
-        return response;
-      }
-
       throw new Error(errorMessage);
     }
     return response;
@@ -208,9 +200,10 @@ export class GraphService {
     }
   }
 
+  // 👇 1. CORREÇÃO DA CAIXA DE ENTRADA: Pede estritamente à pasta "inbox" e não a todas!
   async getEmails(top = 50): Promise<Email[]> {
     const response = await this.makeRequest(
-      `https://graph.microsoft.com/v1.0/me/messages?$top=${top}&$orderby=receivedDateTime desc&$select=id,subject,bodyPreview,body,from,receivedDateTime,sentDateTime,isRead,importance,hasAttachments,toRecipients,ccRecipients,bccRecipients,replyTo,parentFolderId,conversationId,conversationIndex,internetMessageId`,
+      `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=${top}&$orderby=receivedDateTime desc&$select=id,subject,bodyPreview,body,from,receivedDateTime,sentDateTime,isRead,importance,hasAttachments,toRecipients,ccRecipients,bccRecipients,replyTo,parentFolderId,conversationId,conversationIndex,internetMessageId`,
     );
     const data = await response.json();
     const userEmail = await this.getUserEmail();
@@ -237,61 +230,58 @@ export class GraphService {
     }));
   }
 
-  async getArchivedEmails(top = 50): Promise<Email[]> {
+  // 👇 2. FUNÇÃO INTELIGENTE DE LEITURA DE PASTAS ESPECIAIS (Resolve o problema dos idiomas)
+  private async getMessagesFromFolder(standardFolder: string, mappedFolder: string, folderType: string, top: number): Promise<Email[]> {
     try {
       const response = await this.makeRequest(
-        `https://graph.microsoft.com/v1.0/me/mailFolders/archive/messages?$top=${top}&$orderby=receivedDateTime desc&$select=id,subject,bodyPreview,body,from,receivedDateTime,sentDateTime,isRead,importance,hasAttachments,toRecipients,ccRecipients,bccRecipients,replyTo,parentFolderId,conversationId,conversationIndex,internetMessageId`,
+        `https://graph.microsoft.com/v1.0/me/mailFolders/${standardFolder}/messages?$top=${top}&$orderby=receivedDateTime desc&$select=id,subject,bodyPreview,body,from,receivedDateTime,sentDateTime,isRead,importance,hasAttachments,toRecipients,ccRecipients,bccRecipients,replyTo,parentFolderId,conversationId,conversationIndex,internetMessageId`,
       );
       const data = await response.json();
       const userEmail = await this.getUserEmail();
       return data.value.map((email: any) => ({
         ...email,
-        isFromMe:
-          email.from?.emailAddress?.address?.toLowerCase() ===
-          userEmail.toLowerCase(),
-        folderType: "archive",
+        isFromMe: email.from?.emailAddress?.address?.toLowerCase() === userEmail.toLowerCase(),
+        folderType,
       }));
-    } catch (error) {
+    } catch (error: any) {
+      if (error.message.includes("404") || error.message.includes("Item não encontrado")) {
+        try {
+          const foldersResponse = await this.makeRequest("https://graph.microsoft.com/v1.0/me/mailFolders");
+          const foldersData = await foldersResponse.json();
+          const target = foldersData.value.find((f: any) => 
+            f.displayName.toLowerCase().includes(standardFolder.toLowerCase()) || 
+            f.displayName.toLowerCase().includes(mappedFolder.toLowerCase())
+          );
+          if (target) {
+            const response = await this.makeRequest(
+              `https://graph.microsoft.com/v1.0/me/mailFolders/${target.id}/messages?$top=${top}&$orderby=receivedDateTime desc&$select=id,subject,bodyPreview,body,from,receivedDateTime,sentDateTime,isRead,importance,hasAttachments,toRecipients,ccRecipients,bccRecipients,replyTo,parentFolderId,conversationId,conversationIndex,internetMessageId`,
+            );
+            const data = await response.json();
+            const userEmail = await this.getUserEmail();
+            return data.value.map((email: any) => ({
+              ...email,
+              isFromMe: email.from?.emailAddress?.address?.toLowerCase() === userEmail.toLowerCase(),
+              folderType,
+            }));
+          }
+        } catch (e) {
+          return [];
+        }
+      }
       return [];
     }
+  }
+
+  async getArchivedEmails(top = 50): Promise<Email[]> {
+    return this.getMessagesFromFolder("archive", "arquivo", "archive", top);
   }
 
   async getDeletedEmails(top = 50): Promise<Email[]> {
-    try {
-      const response = await this.makeRequest(
-        `https://graph.microsoft.com/v1.0/me/mailFolders/deleteditems/messages?$top=${top}&$orderby=receivedDateTime desc&$select=id,subject,bodyPreview,body,from,receivedDateTime,sentDateTime,isRead,importance,hasAttachments,toRecipients,ccRecipients,bccRecipients,replyTo,parentFolderId,conversationId,conversationIndex,internetMessageId`,
-      );
-      const data = await response.json();
-      const userEmail = await this.getUserEmail();
-      return data.value.map((email: any) => ({
-        ...email,
-        isFromMe:
-          email.from?.emailAddress?.address?.toLowerCase() ===
-          userEmail.toLowerCase(),
-        folderType: "deleted",
-      }));
-    } catch (error) {
-      return [];
-    }
+    return this.getMessagesFromFolder("deleteditems", "eliminados", "deleted", top);
   }
 
   async getSpamEmails(top = 50): Promise<Email[]> {
-    try {
-      const response = await this.makeRequest(
-        `https://graph.microsoft.com/v1.0/me/mailFolders/junkemail/messages?$top=${top}&$orderby=receivedDateTime desc&$select=id,subject,bodyPreview,body,from,receivedDateTime,sentDateTime,isRead,importance,hasAttachments,toRecipients,ccRecipients,bccRecipients,replyTo,parentFolderId,conversationId,conversationIndex,internetMessageId`,
-      );
-      const data = await response.json();
-      const userEmail = await this.getUserEmail();
-      return data.value.map((email: any) => ({
-        ...email,
-        isFromMe:
-          email.from?.emailAddress?.address?.toLowerCase() ===
-          userEmail.toLowerCase(),
-        folderType: "spam",
-      }));
-    } catch (error) {
-      return [];
-    }
+    return this.getMessagesFromFolder("junkemail", "lixo", "spam", top);
   }
 
   async getAllEmails(top = 50): Promise<Email[]> {
@@ -476,15 +466,45 @@ export class GraphService {
   }
 
   async moveToFolder(emailId: string, folderId: string): Promise<void> {
-    await this.makeRequest(
-      `https://graph.microsoft.com/v1.0/me/messages/${emailId}/move`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          destinationId: folderId,
-        }),
-      },
-    );
+    try {
+      await this.makeRequest(
+        `https://graph.microsoft.com/v1.0/me/messages/${emailId}/move`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            destinationId: folderId,
+          }),
+        },
+      );
+    } catch (error: any) {
+      if (error.message.includes("404") || error.message.includes("Item não encontrado")) {
+        const foldersResponse = await this.makeRequest("https://graph.microsoft.com/v1.0/me/mailFolders");
+        const foldersData = await foldersResponse.json();
+        
+        const map: Record<string, string> = {
+          "archive": "arquivo",
+          "junkemail": "lixo",
+          "deleteditems": "eliminados"
+        };
+
+        const target = foldersData.value.find((f: any) => 
+          f.displayName.toLowerCase().includes(folderId.toLowerCase()) || 
+          (map[folderId] && f.displayName.toLowerCase().includes(map[folderId]))
+        );
+
+        if (target) {
+          await this.makeRequest(
+            `https://graph.microsoft.com/v1.0/me/messages/${emailId}/move`,
+            {
+              method: "POST",
+              body: JSON.stringify({ destinationId: target.id }),
+            }
+          );
+          return;
+        }
+      }
+      throw error;
+    }
   }
 
   async deleteMessage(emailId: string): Promise<void> {
