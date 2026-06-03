@@ -266,7 +266,8 @@ export function EmailViewer({
 
         return (
           <div
-            className="prose prose-sm max-w-none prose-slate"
+            // 👇 FORÇA o Tailwind a sobrepor os estilos manhosos do Moodle com !important ([&_a]:!alguma_coisa)
+            className="prose prose-sm max-w-none prose-slate [&_a]:!text-blue-600 [&_a]:!underline [&_a]:!underline-offset-2 hover:[&_a]:!text-blue-800"
             dangerouslySetInnerHTML={{ __html: processedHtml }}
           />
         );
@@ -533,18 +534,7 @@ export function EmailViewer({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {!email.isRead && (
-                    <Button
-                      variant="ghost"
-                      className="rounded-xl text-blue-600 hover:bg-blue-50 font-medium"
-                      onClick={markAsRead}
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      Marcar como lido
-                    </Button>
-                  )}
                   
-                  {/* 👇 USA A NOSSA NOVA VARIÁVEL isEmailArchived AQUI 👇 */}
                   {!isEmailArchived && !composerMode && (
                     <Button
                       variant="ghost"

@@ -84,6 +84,12 @@ export function KanbanBoard() {
   }, []);
 
   useEffect(() => {
+    if (account?.homeAccountId && isSupabaseAvailable()) {
+      loadCustomColumns();
+    }
+  }, [account?.homeAccountId]);
+
+  useEffect(() => {
     if (!account?.homeAccountId || !isSupabaseAvailable()) {
       setIsInitialLoad(false);
       return;
@@ -216,10 +222,10 @@ export function KanbanBoard() {
             .update({ ...updates, updated_at: new Date().toISOString() })
             .eq("email_id", emailId);
         } else {
+          // 👇 AQUI: Removi a linha 'priority: "media",' para que os emails não tenham prioridade por defeito
           await supabase!.from("email_metadata").insert({
             email_id: emailId,
             user_id: account.homeAccountId,
-            priority: "media",
             column_id: currentColumnId,
             tags: [],
             ...updates,
@@ -342,7 +348,9 @@ export function KanbanBoard() {
     if (filters.priority.length > 0) {
       filtered = filtered.filter((t) =>
         t.emails.some((e) => {
-          const emailPriority = emailsMetadata[e.id]?.priority || "baixa";
+          const emailPriority = emailsMetadata[e.id]?.priority;
+          // Agora só passa no filtro se o email tiver realmente a prioridade que estamos a procurar
+          if (!emailPriority) return false; 
           return filters.priority.includes(emailPriority);
         }),
       );

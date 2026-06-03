@@ -150,8 +150,9 @@ export function KanbanColumn({
     ([_, groupThreads]) => groupThreads.length > 0,
   );
 
+  // 👇 Só ativa o Infinite Scroll se a coluna estiver cheia (30+ emails)
   useEffect(() => {
-    if (!onLoadMore || activeThreads.length === 0) return;
+    if (!onLoadMore || activeThreads.length < 30) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -329,8 +330,8 @@ export function KanbanColumn({
                   </div>
                 ))}
                 
-                {/* 👇 3. O DETETOR INVISÍVEL (ou Spinner) NO FUNDO 👇 */}
-                {activeThreads.length > 0 && (
+                {/* 👇 Detetor invisível apenas para colunas cheias 👇 */}
+                {activeThreads.length >= 30 && (
                   <div ref={loadMoreRef} className="py-6 flex justify-center pb-24">
                     {isFetchingMore && (
                       <div className="flex items-center gap-2 text-slate-400 bg-white px-4 py-2 rounded-full shadow-sm border border-slate-100">

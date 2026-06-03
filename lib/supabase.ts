@@ -1,6 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
 
-// Verificar se as variáveis de ambiente estão definidas
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -55,6 +54,7 @@ export interface EmailMetadata {
   subtasks?: Subtask[];
   created_at?: string;
   updated_at?: string;
+  due_date?: string | null;
 }
 
 export type CustomColumn = {

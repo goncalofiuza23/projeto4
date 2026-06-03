@@ -97,6 +97,8 @@ export const EmailThreadCard = memo(function EmailThreadCard({
   const [newTag, setNewTag] = useState("");
   const [priority, setPriority] = useState("media");
   const [tags, setTags] = useState<string[]>([]);
+  const [dueDateStr, setDueDateStr] = useState<string>(""); 
+
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [isMoving, setIsMoving] = useState(false);
   const [isVisuallyHidden, setIsVisuallyHidden] = useState(false);
@@ -149,6 +151,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
   let highestPriority = "baixa";
   let snoozedUntilDate: string | null = null;
   let subtasks: Subtask[] = [];
+  let cardDueDate: string | null = null;
 
   uniqueEmails.forEach((e) => {
     const metadata = emailsMetadata[e.id];
@@ -165,6 +168,9 @@ export const EmailThreadCard = memo(function EmailThreadCard({
     if (metadata?.subtasks && metadata.subtasks.length > 0) {
       subtasks = metadata.subtasks;
     }
+    if (metadata?.due_date) {
+      cardDueDate = metadata.due_date;
+    }
   });
 
   const isSnoozedActive = snoozedUntilDate
@@ -180,11 +186,29 @@ export const EmailThreadCard = memo(function EmailThreadCard({
   const isAllTasksCompleted =
     totalTasks > 0 && completedTasksCount === totalTasks;
 
+  const getDueDateStyles = (dateString: string) => {
+    const due = new Date(dateString);
+    due.setHours(23, 59, 59, 999);
+    const now = new Date();
+    const diffTime = due.getTime() - now.getTime();
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+
+    if (diffDays < 0) return "text-red-700 bg-red-100 border-red-300 font-bold";
+    if (diffDays <= 2) return "text-red-600 bg-red-50 border-red-200 font-bold";
+    if (diffDays <= 5) return "text-orange-600 bg-orange-50 border-orange-200 font-bold";
+    return "text-slate-900 bg-slate-100 border-slate-200 font-medium";
+  };
+
   useEffect(() => {
     const firstEmailMetadata = emailsMetadata[uniqueEmails[0]?.id];
     if (firstEmailMetadata) {
       setPriority(firstEmailMetadata.priority || "media");
       setTags(firstEmailMetadata.tags || []);
+      if (firstEmailMetadata.due_date) {
+        setDueDateStr(firstEmailMetadata.due_date.split("T")[0]);
+      } else {
+        setDueDateStr("");
+      }
     }
   }, [emailsMetadata, uniqueEmails]);
 
@@ -254,6 +278,14 @@ export const EmailThreadCard = memo(function EmailThreadCard({
       onUpdateMetadata(e.id, {
         priority: newPriority as EmailMetadata["priority"],
       });
+    });
+  };
+
+  const handleDueDateChange = (newDate: string) => {
+    setDueDateStr(newDate);
+    const isoDate = newDate ? new Date(newDate).toISOString() : null;
+    uniqueEmails.forEach((e) => {
+      onUpdateMetadata(e.id, { due_date: isoDate });
     });
   };
 
@@ -417,7 +449,9 @@ export const EmailThreadCard = memo(function EmailThreadCard({
             graphService.moveToFolder(e.id, "deleteditems"),
           ),
         );
-        uniqueEmails.forEach((e) => onUpdateMetadata(e.id, { column_id: "deleted" }));
+        uniqueEmails.forEach((e) =>
+          onUpdateMetadata(e.id, { column_id: "deleted" }),
+        );
         toast({
           title: "Eliminado",
           description: "Conversa movida para os Itens Eliminados.",
@@ -519,7 +553,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                         className="cursor-pointer py-2 rounded-lg font-medium"
                       >
                         <Settings className="mr-2 h-4 w-4 text-slate-500" />
-                        Gerir Tags e Prioridade
+                        Gerir Prazos e Tags
                       </DropdownMenuItem>
 
                       <DropdownMenuSeparator className="bg-slate-100" />
@@ -617,6 +651,18 @@ export const EmailThreadCard = memo(function EmailThreadCard({
 
           <div className="px-4 pb-3 flex items-center justify-between mt-auto">
             <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+              
+              {/* 👇 Badge Colorido da Data Limite */}
+              {cardDueDate && (
+                <Badge
+                  variant="outline"
+                  className={`text-[9.5px] px-1.5 py-0 h-4 flex items-center gap-1 ${getDueDateStyles(cardDueDate)}`}
+                >
+                  <Calendar className="h-2.5 w-2.5" />
+                  {new Date(cardDueDate).toLocaleDateString("pt-PT", { day: "2-digit", month: "short" })}
+                </Badge>
+              )}
+
               {totalTasks > 0 && (
                 <div
                   className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold border transition-colors ${
@@ -733,9 +779,23 @@ export const EmailThreadCard = memo(function EmailThreadCard({
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
         <DialogContent className="max-w-md rounded-2xl">
           <DialogHeader>
-            <DialogTitle>Gerir Prioridade e Tags</DialogTitle>
+            <DialogTitle>Gerir Definições do E-mail</DialogTitle>
           </DialogHeader>
           <div className="space-y-5 py-4">
+            
+            {/* 👇 Input para escolher o Prazo Limite */}
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-slate-500 uppercase">
+                Data Limite (Prazo)
+              </Label>
+              <Input
+                type="date"
+                value={dueDateStr}
+                onChange={(e) => handleDueDateChange(e.target.value)}
+                className="h-10 rounded-xl bg-slate-50 border-slate-200"
+              />
+            </div>
+
             <div className="space-y-2">
               <Label
                 htmlFor="priority"
@@ -795,6 +855,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
       </Dialog>
 
       <Dialog open={isSnoozeModalOpen} onOpenChange={setIsSnoozeModalOpen}>
+        {/* ... (O Modal de Snooze que já tinhas mantém-se igualzinho!) */}
         <DialogContent className="max-w-sm rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-slate-800">
