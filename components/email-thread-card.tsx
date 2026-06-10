@@ -95,7 +95,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
   const [customSnoozeDate, setCustomSnoozeDate] = useState("");
 
   const [newTag, setNewTag] = useState("");
-  const [priority, setPriority] = useState("media");
+  const [priority, setPriority] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [dueDateStr, setDueDateStr] = useState<string>(""); 
 
@@ -116,6 +116,11 @@ export const EmailThreadCard = memo(function EmailThreadCard({
       return true;
     });
   }, [thread.emails]);
+
+  // 👇 NOVA METRICA: Calcula quantos e-mails individuais da conversação estão por ler 👇
+  const unreadEmailsCount = useMemo(() => {
+    return uniqueEmails.filter((e) => !e.isRead).length;
+  }, [uniqueEmails]);
 
   const formatDateShort = (dateString: string) => {
     const date = new Date(dateString);
@@ -148,7 +153,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
   const isUnread = thread.hasUnread;
 
   const priorities = ["urgente", "alta", "media", "baixa"];
-  let highestPriority = "baixa";
+  let highestPriority: string | null = null;
   let snoozedUntilDate: string | null = null;
   let subtasks: Subtask[] = [];
   let cardDueDate: string | null = null;
@@ -156,10 +161,14 @@ export const EmailThreadCard = memo(function EmailThreadCard({
   uniqueEmails.forEach((e) => {
     const metadata = emailsMetadata[e.id];
     if (metadata?.priority) {
-      const currentIndex = priorities.indexOf(metadata.priority);
-      const highestIndex = priorities.indexOf(highestPriority);
-      if (currentIndex < highestIndex) {
+      if (!highestPriority) {
         highestPriority = metadata.priority;
+      } else {
+        const currentIndex = priorities.indexOf(metadata.priority);
+        const highestIndex = priorities.indexOf(highestPriority);
+        if (currentIndex < highestIndex) {
+          highestPriority = metadata.priority;
+        }
       }
     }
     if (metadata?.snoozed_until) {
@@ -202,7 +211,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
   useEffect(() => {
     const firstEmailMetadata = emailsMetadata[uniqueEmails[0]?.id];
     if (firstEmailMetadata) {
-      setPriority(firstEmailMetadata.priority || "media");
+      setPriority(firstEmailMetadata.priority || null);
       setTags(firstEmailMetadata.tags || []);
       if (firstEmailMetadata.due_date) {
         setDueDateStr(firstEmailMetadata.due_date.split("T")[0]);
@@ -273,11 +282,10 @@ export const EmailThreadCard = memo(function EmailThreadCard({
   };
 
   const handlePriorityChange = (newPriority: string) => {
-    setPriority(newPriority as EmailMetadata["priority"]);
+    const val = newPriority === "nenhuma" ? null : newPriority as EmailMetadata["priority"];
+    setPriority(val);
     uniqueEmails.forEach((e) => {
-      onUpdateMetadata(e.id, {
-        priority: newPriority as EmailMetadata["priority"],
-      });
+      onUpdateMetadata(e.id, { priority: val });
     });
   };
 
@@ -479,7 +487,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
   return (
     <>
       <Card
-        className={`mb-3 bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 border-l-4 group relative flex flex-col ${
+        className={`mb-2 bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 border-l-4 group relative flex flex-col ${
           isUnread
             ? "border-l-blue-600 ring-1 ring-blue-100"
             : "hover:border-l-blue-400 border-l-transparent border border-slate-200"
@@ -487,7 +495,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
       >
         <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
           <CardHeader
-            className="p-4 pb-3 cursor-pointer relative flex flex-col"
+            className="p-3 pb-2 cursor-pointer relative flex flex-col"
             onClick={(e) => {
               e.stopPropagation();
               setSelectedEmail(latestEmail.id);
@@ -495,7 +503,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
             }}
           >
             <div
-              className="absolute top-3 right-3 z-10"
+              className="absolute top-2 right-2 z-10"
               onClick={(e) => e.stopPropagation()}
             >
               <DropdownMenu>
@@ -503,9 +511,9 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-slate-400 hover:text-slate-800 hover:bg-slate-100/80 rounded-lg transition-colors"
+                    className="h-7 w-7 text-slate-400 hover:text-slate-800 hover:bg-slate-100/80 rounded-lg transition-colors"
                   >
-                    <MoreHorizontal className="h-5 w-5" />
+                    <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
@@ -595,37 +603,36 @@ export const EmailThreadCard = memo(function EmailThreadCard({
               </DropdownMenu>
             </div>
 
-            <div className="flex gap-3 pr-8 w-full">
-              <div className="flex flex-col items-center gap-2 mt-1">
+            <div className="flex gap-2 pr-8 w-full">
+              <div className="flex flex-col items-center gap-1 mt-0.5">
                 <UserAvatar
                   name={originalEmail.from?.emailAddress?.name}
                   email={originalEmail.from?.emailAddress?.address || ""}
                   imageUrl={avatarUrl}
-                  className="h-10 w-10 flex-shrink-0 shadow-sm"
+                  className="h-8 w-8 flex-shrink-0 shadow-sm text-[10px]"
                 />
-                <span className="text-xs">
-                  {
-                    priorityIcons[highestPriority as keyof typeof priorityIcons]
-                      .icon
-                  }
-                </span>
+                {highestPriority && (
+                  <span className="text-[10px]">
+                    {priorityIcons[highestPriority as keyof typeof priorityIcons].icon}
+                  </span>
+                )}
               </div>
 
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-1">
+              <div className="flex-1 min-w-0 pt-0.5">
+                <div className="flex items-center justify-between mb-0.5">
                   <span
-                    className={`text-xs truncate pr-2 ${isUnread ? "font-bold text-slate-900" : "font-medium text-slate-600"}`}
+                    className={`text-[11px] truncate pr-2 ${isUnread ? "font-bold text-slate-900" : "font-medium text-slate-600"}`}
                   >
                     {getParticipantsDisplay()}
                   </span>
-                  <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-medium whitespace-nowrap">
-                    {hasAttachments && <Paperclip className="h-3 w-3" />}
+                  <div className="flex items-center gap-1.5 text-[9px] text-slate-400 font-medium whitespace-nowrap">
+                    {hasAttachments && <Paperclip className="h-2.5 w-2.5" />}
                     {formatDateShort(thread.lastActivity)}
                   </div>
                 </div>
 
                 <h3
-                  className={`text-sm leading-tight mb-1.5 line-clamp-2 pr-2 transition-colors ${
+                  className={`text-xs leading-tight mb-1 line-clamp-2 pr-2 transition-colors ${
                     isUnread
                       ? "font-bold text-slate-900"
                       : "font-semibold text-slate-700"
@@ -635,43 +642,43 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                   {uniqueEmails.length > 1 && (
                     <Badge
                       variant="secondary"
-                      className="ml-2 text-[10px] px-1.5 py-0 h-4 bg-slate-100 text-slate-500 align-middle"
+                      // 👇 ATUALIZADO: Mostra a quantidade de mensagens e quantas estão por ler 👇
+                      className="ml-1.5 text-[9px] px-1 py-0 h-3 bg-slate-100 text-slate-500 align-middle font-medium"
                     >
-                      {uniqueEmails.length} msg
+                      {uniqueEmails.length} msg {unreadEmailsCount > 0 ? `(${unreadEmailsCount} por ler)` : ""}
                     </Badge>
                   )}
                 </h3>
 
-                <p className="text-xs line-clamp-2 text-slate-500 leading-relaxed pr-2">
+                <p className="text-[10px] line-clamp-2 text-slate-500 leading-snug pr-2">
                   {originalEmail.bodyPreview}
                 </p>
               </div>
             </div>
           </CardHeader>
 
-          <div className="px-4 pb-3 flex items-center justify-between mt-auto">
-            <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+          <div className="px-3 pb-2 flex items-center justify-between mt-auto">
+            <div className="flex items-center gap-1.5 flex-wrap flex-1 min-w-0">
               
-              {/* 👇 Badge Colorido da Data Limite */}
               {cardDueDate && (
                 <Badge
                   variant="outline"
-                  className={`text-[9.5px] px-1.5 py-0 h-4 flex items-center gap-1 ${getDueDateStyles(cardDueDate)}`}
+                  className={`text-[9px] px-1 py-0 h-4 flex items-center gap-1 ${getDueDateStyles(cardDueDate)}`}
                 >
-                  <Calendar className="h-2.5 w-2.5" />
+                  <Calendar className="h-2 w-2" />
                   {new Date(cardDueDate).toLocaleDateString("pt-PT", { day: "2-digit", month: "short" })}
                 </Badge>
               )}
 
               {totalTasks > 0 && (
                 <div
-                  className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold border transition-colors ${
+                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold border transition-colors ${
                     isAllTasksCompleted
                       ? "bg-[#658835] text-white border-[#658835]"
                       : "bg-slate-100 text-slate-600 border-slate-200"
                   }`}
                 >
-                  <CheckSquare2 className="h-3.5 w-3.5" />
+                  <CheckSquare2 className="h-3 w-3" />
                   <span>
                     {completedTasksCount}/{totalTasks}
                   </span>
@@ -679,10 +686,10 @@ export const EmailThreadCard = memo(function EmailThreadCard({
               )}
 
               {isSnoozedActive && snoozedUntilDate && (
-                <div className="w-full bg-indigo-50 border border-indigo-100 rounded-xl py-2 px-3 flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <BellRing className="h-4 w-4 text-indigo-500" />
-                    <span className="text-[11px] font-bold text-indigo-700">
+                <div className="w-full bg-indigo-50 border border-indigo-100 rounded-lg py-1.5 px-2 flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <BellRing className="h-3 w-3 text-indigo-500" />
+                    <span className="text-[10px] font-bold text-indigo-700">
                       Acorda a:{" "}
                       {new Date(snoozedUntilDate).toLocaleDateString("pt-PT", {
                         day: "numeric",
@@ -697,41 +704,42 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                 <Badge
                   key={tag}
                   variant="secondary"
-                  className="text-[9px] px-1.5 py-0 h-4 font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 truncate max-w-[60px]"
+                  className="text-[8px] px-1 py-0 h-3.5 font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 truncate max-w-[60px]"
                 >
                   {tag}
                 </Badge>
               ))}
             </div>
 
-            <div className="flex items-center shrink-0 ml-2">
+            <div className="flex items-center shrink-0 ml-1">
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 w-6 p-0 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full"
+                className="h-5 w-5 p-0 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full"
                 onClick={(e) => {
                   e.stopPropagation();
                   setIsExpanded(!isExpanded);
                 }}
               >
                 {isExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
+                  <ChevronDown className="h-3 w-3" />
                 ) : (
-                  <ChevronRight className="h-4 w-4" />
+                  <ChevronRight className="h-3 w-3" />
                 )}
               </Button>
             </div>
           </div>
 
           <CollapsibleContent className="space-y-0 px-2 pb-2">
-            <div className="bg-slate-50 rounded-xl p-2 border border-slate-100 mt-2">
-              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+            <div className="bg-slate-50 rounded-xl p-1.5 border border-slate-100 mt-1">
+              <div className="space-y-1 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
                 {uniqueEmails.map((item) => (
                   <div
                     key={item.id}
-                    className={`flex items-start gap-2 p-2 rounded-lg transition-colors cursor-pointer border ${
+                    // 👇 ATUALIZADO: Adiciona uma borda e sombra azul suave nos que não foram lidos 👇
+                    className={`flex items-start gap-2 p-1.5 rounded-lg transition-colors cursor-pointer border ${
                       !item.isRead
-                        ? "bg-white border-blue-100 shadow-sm"
+                        ? "bg-white border-blue-200 shadow-sm ring-1 ring-blue-50/50"
                         : "bg-transparent border-transparent hover:bg-slate-200/50"
                     }`}
                     onClick={(e) => {
@@ -749,22 +757,24 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                           ? avatarUrl
                           : undefined
                       }
-                      className="h-5 w-5 mt-0.5 flex-shrink-0 shadow-sm border border-slate-100"
+                      className="h-4 w-4 mt-0.5 flex-shrink-0 shadow-sm border border-slate-100 text-[8px]"
                     />
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center justify-between gap-1">
+                        {/* 👇 ATUALIZADO: Força fonte 'font-bold text-slate-900' se não estiver lido 👇 */}
                         <span
-                          className={`text-[11px] truncate ${!item.isRead ? "font-bold text-slate-700" : "font-medium text-slate-500"}`}
+                          className={`text-[10px] truncate ${!item.isRead ? "font-bold text-slate-900" : "font-medium text-slate-500"}`}
                         >
                           {item.isFromMe
                             ? "Você"
                             : item.from?.emailAddress?.name}
                         </span>
-                        <span className="text-[9px] text-slate-400 whitespace-nowrap">
+                        <span className={`text-[8px] whitespace-nowrap ${!item.isRead ? "font-bold text-blue-600" : "text-slate-400"}`}>
                           {formatDateShort(item.receivedDateTime)}
                         </span>
                       </div>
-                      <p className="text-[10px] truncate text-slate-400 mt-0.5">
+                      {/* 👇 ATUALIZADO: O resumo do texto também fica a negrito 'font-bold text-slate-800' nos não lidos 👇 */}
+                      <p className={`text-[9px] truncate ${!item.isRead ? "font-bold text-slate-800" : "text-slate-400"}`}>
                         {item.bodyPreview}
                       </p>
                     </div>
@@ -783,7 +793,6 @@ export const EmailThreadCard = memo(function EmailThreadCard({
           </DialogHeader>
           <div className="space-y-5 py-4">
             
-            {/* 👇 Input para escolher o Prazo Limite */}
             <div className="space-y-2">
               <Label className="text-xs font-bold text-slate-500 uppercase">
                 Data Limite (Prazo)
@@ -803,11 +812,12 @@ export const EmailThreadCard = memo(function EmailThreadCard({
               >
                 Prioridade
               </Label>
-              <Select value={priority} onValueChange={handlePriorityChange}>
+              <Select value={priority || "nenhuma"} onValueChange={handlePriorityChange}>
                 <SelectTrigger className="h-10 rounded-xl bg-slate-50 border-slate-200">
-                  <SelectValue />
+                  <SelectValue placeholder="Selecione a prioridade..." />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl">
+                  <SelectItem value="nenhuma">⚪ Nenhuma Prioridade</SelectItem>
                   <SelectItem value="baixa">🟢 Baixa</SelectItem>
                   <SelectItem value="media">🟡 Média</SelectItem>
                   <SelectItem value="alta">🟠 Alta</SelectItem>
@@ -855,7 +865,6 @@ export const EmailThreadCard = memo(function EmailThreadCard({
       </Dialog>
 
       <Dialog open={isSnoozeModalOpen} onOpenChange={setIsSnoozeModalOpen}>
-        {/* ... (O Modal de Snooze que já tinhas mantém-se igualzinho!) */}
         <DialogContent className="max-w-sm rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-slate-800">

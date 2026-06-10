@@ -41,6 +41,7 @@ import {
   List as ListIcon,
   ListOrdered,
   Highlighter,
+  Image as ImageIcon,
 } from "lucide-react";
 import { useAuth } from "./auth-provider";
 import {
@@ -48,6 +49,11 @@ import {
   type EmailDraft,
   type Email,
 } from "@/lib/microsoft-graph";
+import {
+  supabase,
+  isSupabaseAvailable,
+  safeSupabaseOperation,
+} from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 
@@ -90,10 +96,14 @@ export function EmailComposer({
   onEmailSent,
   onSendStart,
 }: EmailComposerProps) {
-  const { accessToken } = useAuth();
+  const { accessToken, account } = useAuth();
   const { toast } = useToast();
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
+  
+  const sigEditorRef = useRef<HTMLDivElement>(null);
+  const sigFileInputRef = useRef<HTMLInputElement>(null);
 
   const [isLoading, setIsLoading] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -131,25 +141,33 @@ export function EmailComposer({
     });
   };
 
-  // --- GESTÃO DE ASSINATURAS ---
   const [signatures, setSignatures] = useState<Signature[]>([]);
   const [isSignManagerOpen, setIsSignManagerOpen] = useState(false);
   const [newSigName, setNewSigName] = useState("");
   const [newSigContent, setNewSigContent] = useState("");
 
   useEffect(() => {
-    const saved = localStorage.getItem("email_signatures");
-    if (saved) {
-      try {
-        setSignatures(JSON.parse(saved));
-      } catch (e) {
-        setSignatures([]);
-      }
-    }
-  }, []);
+    if (!account?.homeAccountId || !isSupabaseAvailable()) return;
 
-  const saveSignature = () => {
-    if (!newSigName.trim() || !newSigContent.trim()) return;
+    const loadSignatures = async () => {
+      await safeSupabaseOperation(async () => {
+        const { data } = await supabase!
+          .from("user_preferences")
+          .select("signatures")
+          .eq("user_id", account.homeAccountId)
+          .single();
+
+        if (data?.signatures) {
+          setSignatures(data.signatures);
+        }
+      });
+    };
+
+    loadSignatures();
+  }, [account?.homeAccountId]);
+
+  const saveSignature = async () => {
+    if (!newSigName.trim() || !newSigContent.trim() || !account?.homeAccountId) return;
 
     const newSignature: Signature = {
       id: Date.now().toString(),
@@ -159,21 +177,42 @@ export function EmailComposer({
 
     const updatedSignatures = [...signatures, newSignature];
     setSignatures(updatedSignatures);
-    localStorage.setItem("email_signatures", JSON.stringify(updatedSignatures));
 
     setNewSigName("");
     setNewSigContent("");
+    if (sigEditorRef.current) sigEditorRef.current.innerHTML = "";
+    
+    setIsSignManagerOpen(false);
+
+    if (isSupabaseAvailable()) {
+      await safeSupabaseOperation(async () => {
+        await supabase!.from("user_preferences").upsert({
+          user_id: account.homeAccountId,
+          signatures: updatedSignatures,
+          updated_at: new Date().toISOString(),
+        });
+      });
+    }
 
     toast({
       title: "Assinatura Guardada",
-      description: `A assinatura "${newSignature.name}" foi guardada e já pode ser utilizada.`,
+      description: `A assinatura "${newSignature.name}" está pronta a usar.`,
     });
   };
 
-  const deleteSignature = (id: string) => {
+  const deleteSignature = async (id: string) => {
     const updatedSignatures = signatures.filter((sig) => sig.id !== id);
     setSignatures(updatedSignatures);
-    localStorage.setItem("email_signatures", JSON.stringify(updatedSignatures));
+    
+    if (account?.homeAccountId && isSupabaseAvailable()) {
+      await safeSupabaseOperation(async () => {
+        await supabase!.from("user_preferences").upsert({
+          user_id: account.homeAccountId,
+          signatures: updatedSignatures,
+          updated_at: new Date().toISOString(),
+        });
+      });
+    }
     
     toast({
       title: "Assinatura Removida",
@@ -182,7 +221,9 @@ export function EmailComposer({
   };
 
   const insertSignature = (content: string) => {
-    const htmlContent = content.replace(/\n/g, "<br>");
+    const htmlContent = content.includes("<") && content.includes(">") 
+      ? content 
+      : content.replace(/\n/g, "<br>");
     
     if (editorRef.current) {
       const currentHtml = editorRef.current.innerHTML;
@@ -199,7 +240,6 @@ export function EmailComposer({
       }));
     }
   };
-  // -----------------------------
 
   useEffect(() => {
     if (!isOpen) return;
@@ -226,11 +266,56 @@ export function EmailComposer({
 
     let subject = originalEmail.subject || "";
     let bodyContent = ""; 
+    
+    let originalBodyContent = originalEmail.body?.content || "";
+
+    if (originalEmail.body?.contentType === "html" && originalEmail.attachments && originalEmail.attachments.length > 0) {
+      originalEmail.attachments.forEach((att: any) => {
+        if (att.contentBytes) {
+          const base64String = `data:${att.contentType || "image/png"};base64,${att.contentBytes}`;
+          if (att.contentId) {
+            const cleanCid = att.contentId.replace(/[<>]/g, '');
+            const cidRegex1 = new RegExp(`cid:${cleanCid}`, 'gi');
+            originalBodyContent = originalBodyContent.replace(cidRegex1, base64String);
+            const cidRegex2 = new RegExp(`cid:${att.contentId}`, 'gi');
+            originalBodyContent = originalBodyContent.replace(cidRegex2, base64String);
+          }
+          if (att.name) {
+            const nameRegex = new RegExp(`cid:${att.name}`, 'gi');
+            originalBodyContent = originalBodyContent.replace(nameRegex, base64String);
+            const directNameRegex = new RegExp(`src=["']${att.name}["']`, 'gi');
+            originalBodyContent = originalBodyContent.replace(directNameRegex, `src="${base64String}"`);
+          }
+        }
+      });
+    }
+
+    const fromName = originalEmail.from?.emailAddress?.name || originalEmail.from?.emailAddress?.address || "";
+    const dateStr = originalEmail.receivedDateTime ? new Date(originalEmail.receivedDateTime).toLocaleString("pt-PT") : "";
+    const toNames = originalEmail.toRecipients?.map(r => r.emailAddress.name || r.emailAddress.address).join("; ") || "";
+    
+    // 👇 BUSCA OS DESTINATÁRIOS EM CC DO E-MAIL ORIGINAL 👇
+    const ccNames = originalEmail.ccRecipients?.map(r => r.emailAddress.name || r.emailAddress.address).join("; ") || "";
+    const ccLine = ccNames ? `<b>Cc:</b> ${ccNames}<br>` : "";
+
+    const historyHeader = `<br><br><br>
+<hr tabindex="-1" style="display:inline-block; width:100%; border:none; border-top:1px solid #E1E1E1;">
+<div style="font-family: Calibri, Arial, Helvetica, sans-serif; font-size: 11pt; color: #000000; padding-top: 8px;">
+<b>De:</b> ${fromName}<br>
+<b>Enviado:</b> ${dateStr}<br>
+<b>Para:</b> ${toNames}<br>
+${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
+</div>
+<br>`;
 
     switch (mode) {
       case "reply":
       case "replyAll":
-        subject = subject.startsWith("Re: ") ? subject : `Re: ${subject}`;
+        subject = subject.toLowerCase().startsWith("re:") || subject.toLowerCase().startsWith("fw:") 
+          ? subject 
+          : `RE: ${subject}`;
+        
+        bodyContent = historyHeader + originalBodyContent;
 
         const replyTo = originalEmail.replyTo?.[0] || originalEmail.from;
         if (mode === "reply") {
@@ -252,7 +337,11 @@ export function EmailComposer({
         break;
 
       case "forward":
-        subject = subject.startsWith("Fwd: ") ? subject : `Fwd: ${subject}`;
+        subject = subject.toLowerCase().startsWith("fw:") || subject.toLowerCase().startsWith("fwd:") 
+          ? subject 
+          : `FW: ${subject}`;
+        
+        bodyContent = historyHeader + originalBodyContent;
         break;
     }
 
@@ -267,6 +356,18 @@ export function EmailComposer({
     
     if (editorRef.current) {
       editorRef.current.innerHTML = bodyContent;
+      
+      setTimeout(() => {
+        if (editorRef.current) {
+          editorRef.current.focus();
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.setStart(editorRef.current, 0);
+          range.collapse(true);
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+        }
+      }, 100);
     }
   }, [isOpen, originalEmail, mode]);
 
@@ -291,7 +392,6 @@ export function EmailComposer({
     setAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // 👇 Atualizada para suportar valores de formatação (Fontes, Tamanhos e Cores)
   const executeCommand = (command: string, value: string | undefined = undefined) => {
     document.execCommand(command, false, value);
     checkFormattingState();
@@ -403,9 +503,20 @@ export function EmailComposer({
       case "replyAll":
         return "Responder a Todos";
       case "forward":
-        return "Encaminhar Email";
+        return "Reencaminhar Email";
       default:
         return "Nova Mensagem";
+    }
+  };
+
+  const getButtonText = () => {
+    switch (mode) {
+      case "new":
+        return "Enviar Mensagem";
+      case "forward":
+        return "Reencaminhar";
+      default:
+        return "Responder";
     }
   };
 
@@ -549,10 +660,8 @@ export function EmailComposer({
               <div className="pt-2 flex-1 flex flex-col min-h-[300px]">
                 <div className="border border-slate-200 rounded-xl bg-white flex flex-col flex-1 overflow-hidden shadow-sm">
                   
-                  {/* 👇 BARRA DE FERRAMENTAS COM FONTES E CORES 👇 */}
                   <div className="flex flex-wrap items-center gap-1 p-2 border-b border-slate-100 bg-slate-50/80">
                     
-                    {/* Fonte */}
                     <Select onValueChange={(value) => executeCommand("fontName", value)}>
                       <SelectTrigger className="h-8 w-[130px] text-xs border-transparent bg-transparent shadow-none hover:bg-slate-200 focus:ring-0 px-2 transition-colors">
                         <SelectValue placeholder="Fonte" />
@@ -566,7 +675,6 @@ export function EmailComposer({
                       </SelectContent>
                     </Select>
 
-                    {/* Tamanho */}
                     <Select onValueChange={(value) => executeCommand("fontSize", value)}>
                       <SelectTrigger className="h-8 w-[80px] text-xs border-transparent bg-transparent shadow-none hover:bg-slate-200 focus:ring-0 px-2 transition-colors">
                         <SelectValue placeholder="Tam." />
@@ -614,7 +722,6 @@ export function EmailComposer({
                     
                     <div className="w-px h-5 bg-slate-300 mx-1" />
 
-                    {/* Cor do Texto (Forecolor) */}
                     <div className="relative flex items-center justify-center w-8 h-8 rounded-md hover:bg-slate-200 overflow-hidden cursor-pointer" title="Cor do Texto">
                       <span className="font-serif font-bold text-slate-700 pointer-events-none z-10 text-[15px] border-b-[3px] border-red-500 leading-none pb-0.5">A</span>
                       <input 
@@ -624,7 +731,6 @@ export function EmailComposer({
                       />
                     </div>
 
-                    {/* Cor de Fundo / Marcador (HiliteColor) */}
                     <div className="relative flex items-center justify-center w-8 h-8 rounded-md hover:bg-slate-200 overflow-hidden cursor-pointer" title="Cor de Destaque">
                       <Highlighter className="h-[18px] w-[18px] text-slate-700 pointer-events-none z-10" />
                       <input 
@@ -780,7 +886,7 @@ export function EmailComposer({
                 ) : (
                   <Send className="h-4 w-4 mr-2" />
                 )}
-                {mode === "new" ? "Enviar Mensagem" : "Responder"}
+                {getButtonText()}
               </Button>
             </div>
           </div>
@@ -788,7 +894,10 @@ export function EmailComposer({
       </Dialog>
 
       <Dialog open={isSignManagerOpen} onOpenChange={setIsSignManagerOpen}>
-        <DialogContent className="max-w-md rounded-2xl">
+        <DialogContent 
+          className="max-w-md rounded-2xl"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
           <DialogHeader>
             <DialogTitle>Gerir Assinaturas</DialogTitle>
           </DialogHeader>
@@ -830,12 +939,73 @@ export function EmailComposer({
                 onChange={(e) => setNewSigName(e.target.value)}
                 className="h-10 rounded-xl bg-slate-50 border-slate-200 shadow-none"
               />
-              <Textarea
-                placeholder="Escreva o texto da sua assinatura aqui..."
-                value={newSigContent}
-                onChange={(e) => setNewSigContent(e.target.value)}
-                className="min-h-[120px] rounded-xl bg-slate-50 border-slate-200 resize-none shadow-none text-sm"
-              />
+              
+              <div className="border border-slate-200 rounded-xl overflow-hidden flex flex-col bg-white">
+                <div className="flex items-center gap-1 p-1.5 border-b border-slate-100 bg-slate-50">
+                  <Select onValueChange={(value) => {
+                    if (sigEditorRef.current) {
+                      sigEditorRef.current.focus();
+                      document.execCommand("fontSize", false, value);
+                      setNewSigContent(sigEditorRef.current.innerHTML);
+                    }
+                  }}>
+                    <SelectTrigger className="h-7 w-[80px] text-xs border-transparent bg-transparent shadow-none hover:bg-slate-200 focus:ring-0 px-2 transition-colors">
+                      <SelectValue placeholder="Tam." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">10 pt</SelectItem>
+                      <SelectItem value="2">13 pt</SelectItem>
+                      <SelectItem value="3">16 pt</SelectItem>
+                      <SelectItem value="4">18 pt</SelectItem>
+                      <SelectItem value="5">24 pt</SelectItem>
+                      <SelectItem value="6">32 pt</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <div className="w-px h-4 bg-slate-300 mx-1" />
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-slate-600 hover:bg-slate-200 text-xs font-medium"
+                    onClick={() => sigFileInputRef.current?.click()}
+                  >
+                    <ImageIcon className="h-3.5 w-3.5 mr-1" />
+                    Adicionar Imagem
+                  </Button>
+                  <input
+                    type="file"
+                    ref={sigFileInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          const dataUrl = ev.target?.result as string;
+                          if (sigEditorRef.current) {
+                            sigEditorRef.current.focus();
+                            document.execCommand('insertImage', false, dataUrl);
+                            setNewSigContent(sigEditorRef.current.innerHTML);
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                </div>
+                
+                <div
+                  ref={sigEditorRef}
+                  contentEditable
+                  onInput={(e) => setNewSigContent(e.currentTarget.innerHTML)}
+                  className="min-h-[120px] p-3 text-sm focus-visible:outline-none custom-scrollbar overflow-y-auto"
+                  data-placeholder="Escreva a sua assinatura aqui..."
+                />
+              </div>
+
               <Button
                 onClick={saveSignature}
                 disabled={!newSigName.trim() || !newSigContent.trim()}

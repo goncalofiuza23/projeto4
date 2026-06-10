@@ -105,6 +105,11 @@ export function KanbanColumn({
     return { activeThreads: active, snoozedThreads: snoozed };
   }, [threads, emailsMetadata]);
 
+  // 👇 Calcula quantos e-mails estão por ler na coluna 👇
+  const unreadCount = useMemo(() => {
+    return activeThreads.filter(t => t.hasUnread).length;
+  }, [activeThreads]);
+
   const groupedThreads = useMemo(() => {
     const sortedThreads = [...activeThreads].sort((a, b) => {
       return (
@@ -150,9 +155,9 @@ export function KanbanColumn({
     ([_, groupThreads]) => groupThreads.length > 0,
   );
 
-  // 👇 Só ativa o Infinite Scroll se a coluna estiver cheia (30+ emails)
   useEffect(() => {
-    if (!onLoadMore || activeThreads.length < 30) return;
+    // Só ativa o infinite scroll se houver mais de 20 e-mails na coluna
+    if (!onLoadMore || activeThreads.length < 20) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -192,8 +197,14 @@ export function KanbanColumn({
             {title}
           </h3>
         </div>
-        <Badge variant="secondary" className={`${color} text-[10px] px-1 mb-2`}>
+        <Badge variant="secondary" className={`${color} text-[10px] px-1 mb-2 relative`}>
           {activeThreads.length}
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+            </span>
+          )}
         </Badge>
       </div>
     );
@@ -203,16 +214,17 @@ export function KanbanColumn({
     <Card
       className={`shrink-0 w-[400px] bg-slate-50/50 flex flex-col h-[calc(100vh-180px)] transition-all duration-300 border-x border-b border-t-4 border-x-slate-200 border-b-slate-200 ${topBorderClass}`}
     >
-      <CardHeader className="pb-3 sticky top-0 z-10 bg-slate-50/95 backdrop-blur rounded-t-lg">
+      <CardHeader className="pb-2 pt-3 sticky top-0 z-10 bg-slate-50/95 backdrop-blur rounded-t-lg border-b border-transparent">
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-sm">
             <span className="text-base">{icon}</span>
             <span className="font-bold tracking-tight">{title}</span>
+            
             <Badge
               variant="secondary"
-              className={`${color} ml-2 text-[10px] h-5`}
+              className={`${color} ml-2 text-[11px] h-5 px-2 font-semibold`}
             >
-              {activeThreads.length}
+              {activeThreads.length} {unreadCount > 0 ? <span className="ml-1 opacity-80">({unreadCount} por ler)</span> : ""}
             </Badge>
           </CardTitle>
 
@@ -240,33 +252,33 @@ export function KanbanColumn({
             <Collapsible
               open={isSnoozedOpen}
               onOpenChange={setIsSnoozedOpen}
-              className="mb-4"
+              className="mb-2"
             >
               <CollapsibleTrigger asChild>
-                <div className="w-full bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition-colors rounded-xl py-2 px-3 flex items-center justify-between cursor-pointer group mt-2 shadow-sm">
+                <div className="w-full bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition-colors rounded-xl py-1.5 px-3 flex items-center justify-between cursor-pointer group mt-2 shadow-sm">
                   <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-indigo-500" />
-                    <span className="text-xs font-semibold text-indigo-700">
+                    <Clock className="h-3.5 w-3.5 text-indigo-500" />
+                    <span className="text-[11px] font-semibold text-indigo-700">
                       {snoozedThreads.length}{" "}
                       {snoozedThreads.length === 1
-                        ? "E-mail Adiado"
-                        : "E-mails Adiados"}
+                        ? "Adiado"
+                        : "Adiados"}
                     </span>
                   </div>
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 w-6 p-0 text-indigo-400 group-hover:text-indigo-700 bg-transparent hover:bg-transparent"
+                    className="h-5 w-5 p-0 text-indigo-400 group-hover:text-indigo-700 bg-transparent hover:bg-transparent"
                   >
                     {isSnoozedOpen ? (
-                      <ChevronDown className="h-4 w-4" />
+                      <ChevronDown className="h-3.5 w-3.5" />
                     ) : (
-                      <ChevronRight className="h-4 w-4" />
+                      <ChevronRight className="h-3.5 w-3.5" />
                     )}
                   </Button>
                 </div>
               </CollapsibleTrigger>
-              <CollapsibleContent className="pt-3 pb-2 space-y-3">
+              <CollapsibleContent className="pt-2 pb-1 space-y-2">
                 <SortableContext
                   items={snoozedThreads.map((t) => t.id)}
                   strategy={verticalListSortingStrategy}
@@ -292,29 +304,27 @@ export function KanbanColumn({
             strategy={verticalListSortingStrategy}
           >
             {activeThreads.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 px-4 border-2 border-dashed border-slate-200/50 rounded-2xl bg-slate-50/30 mt-2 transition-colors">
-                <div className="bg-white p-3 rounded-full shadow-sm mb-3 ring-4 ring-slate-50">
-                  <Inbox className="h-6 w-6 text-slate-300" />
+              <div className="flex flex-col items-center justify-center py-8 px-4 border-2 border-dashed border-slate-200/50 rounded-2xl bg-slate-50/30 mt-2 transition-colors">
+                <div className="bg-white p-2 rounded-full shadow-sm mb-2 ring-4 ring-slate-50">
+                  <Inbox className="h-5 w-5 text-slate-300" />
                 </div>
-                <p className="text-sm font-medium text-slate-400">
+                <p className="text-xs font-medium text-slate-400">
                   Tudo em dia!
-                </p>
-                <p className="text-[11px] text-slate-400/80 text-center">
-                  Nenhuma conversa ativa nesta coluna.
                 </p>
               </div>
             ) : (
               <>
                 {activeGroups.map(([groupName, groupThreads]) => (
-                  <div key={groupName} className="mb-6 last:mb-0">
-                    <div className="sticky top-0 z-20 bg-slate-50/50 backdrop-blur-sm py-2 mb-3 mt-4 first:mt-0 border-b border-slate-100">
-                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 pl-3">
+                  <div key={groupName} className="mb-4 last:mb-0">
+                    
+                    <div className="sticky top-0 z-20 bg-slate-50/80 backdrop-blur-sm py-1 mb-2 mt-2 first:mt-1">
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 pl-1">
                         {groupName}
                         <span className="h-px bg-slate-200 flex-1"></span>
                       </h4>
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       {groupThreads.map((thread) => (
                         <SortableThreadCard
                           key={thread.id}
@@ -330,15 +340,43 @@ export function KanbanColumn({
                   </div>
                 ))}
                 
-                {/* 👇 Detetor invisível apenas para colunas cheias 👇 */}
-                {activeThreads.length >= 30 && (
-                  <div ref={loadMoreRef} className="py-6 flex justify-center pb-24">
+                {/* 👇 Scroll infinito só aparece se houver + de 20 emails 👇 */}
+                {activeThreads.length >= 20 && (
+                  <div ref={loadMoreRef} className="py-2 flex justify-center pb-4">
                     {isFetchingMore && (
-                      <div className="flex items-center gap-2 text-slate-400 bg-white px-4 py-2 rounded-full shadow-sm border border-slate-100">
-                        <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-                        <span className="text-xs font-medium">A carregar mais...</span>
+                      <div className="flex items-center gap-2 text-slate-400 bg-white px-3 py-1.5 rounded-full shadow-sm border border-slate-100">
+                        <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
+                        <span className="text-[10px] font-medium">A carregar...</span>
                       </div>
                     )}
+                  </div>
+                )}
+                
+                {/* 👇 Botão manual ocultado para colunas com menos de 10 emails 👇 */}
+                {activeThreads.length >= 10 && activeThreads.length < 20 && (
+                  <div className="py-2 flex justify-center pb-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (onLoadMore && !isFetchingMore) {
+                          setIsFetchingMore(true);
+                          onLoadMore();
+                          setTimeout(() => setIsFetchingMore(false), 2000);
+                        }
+                      }}
+                      disabled={isFetchingMore}
+                      className="h-7 text-slate-400 bg-white shadow-sm rounded-full text-[10px] px-3 hover:text-blue-600 hover:bg-blue-50 transition-colors border-slate-200"
+                    >
+                      {isFetchingMore ? (
+                        <>
+                          <Loader2 className="h-3 w-3 animate-spin mr-1.5 text-blue-500" />
+                          A procurar...
+                        </>
+                      ) : (
+                        "Procurar mais antigos"
+                      )}
+                    </Button>
                   </div>
                 )}
               </>

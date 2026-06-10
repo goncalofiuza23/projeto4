@@ -6,6 +6,8 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,7 +26,8 @@ import {
   Pencil,
   Trash2,
   ListTodo,
-  Archive
+  Archive,
+  AlertTriangle
 } from "lucide-react";
 import { useAuth } from "./auth-provider";
 import { GraphService, type Email } from "@/lib/microsoft-graph";
@@ -83,6 +86,8 @@ export function EmailViewer({
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingTaskText, setEditingTaskText] = useState("");
   const [isTasksOpen, setIsTasksOpen] = useState(false);
+  
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
     if (metadata?.subtasks) {
@@ -161,15 +166,84 @@ export function EmailViewer({
     }
   };
 
+  const handleDelete = async () => {
+    setIsDeleteDialogOpen(false);
+    if (!accessToken || !email.id) return;
+
+    try {
+      const graphService = new GraphService(accessToken);
+      
+      await graphService.moveToFolder(email.id, "deleteditems");
+      
+      onUpdateMetadata(email.id, { column_id: "deleted" });
+
+      toast({
+        title: "Email eliminado",
+        description: "A mensagem foi movida para os Itens Eliminados.",
+      });
+
+      if (onEmailSent) onEmailSent();
+      onClose();
+    } catch (error) {
+      console.error("Erro ao eliminar email:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível eliminar o email.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // 👇 NOVA LÓGICA DE ABERTURA DOS ANEXOS 👇
   const handleDownloadAttachment = (attachment: any) => {
     if (attachment.contentBytes) {
-      const linkSource = `data:${attachment.contentType || "application/octet-stream"};base64,${attachment.contentBytes}`;
-      const downloadLink = document.createElement("a");
-      downloadLink.href = linkSource;
-      downloadLink.download = attachment.name;
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      document.body.removeChild(downloadLink);
+      try {
+        // Converte o base64 para ficheiro real (Blob)
+        const byteCharacters = atob(attachment.contentBytes);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: attachment.contentType || "application/octet-stream" });
+        
+        // Cria um endereço temporário no navegador para este ficheiro
+        const blobUrl = URL.createObjectURL(blob);
+
+        const fileName = (attachment.name || "").toLowerCase();
+        
+        // Verifica se é um formato que o browser consegue abrir diretamente
+        const canOpenInBrowser = 
+          fileName.endsWith(".pdf") || 
+          fileName.endsWith(".jpg") || 
+          fileName.endsWith(".jpeg") || 
+          fileName.endsWith(".png") || 
+          fileName.endsWith(".gif") || 
+          fileName.endsWith(".txt");
+
+        if (canOpenInBrowser) {
+          // Abre num novo separador
+          window.open(blobUrl, "_blank");
+        } else {
+          // Força o download (para Word, Excel, etc.)
+          const downloadLink = document.createElement("a");
+          downloadLink.href = blobUrl;
+          downloadLink.download = attachment.name;
+          document.body.appendChild(downloadLink);
+          downloadLink.click();
+          document.body.removeChild(downloadLink);
+        }
+        
+        // Limpa a memória após alguns segundos para não pesar no PC
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+        
+      } catch (e) {
+        toast({
+          title: "Erro ao processar anexo",
+          description: "Não foi possível ler este ficheiro.",
+          variant: "destructive",
+        });
+      }
     } else {
       toast({
         title: "Erro de Download",
@@ -266,7 +340,6 @@ export function EmailViewer({
 
         return (
           <div
-            // 👇 FORÇA o Tailwind a sobrepor os estilos manhosos do Moodle com !important ([&_a]:!alguma_coisa)
             className="prose prose-sm max-w-none prose-slate [&_a]:!text-blue-600 [&_a]:!underline [&_a]:!underline-offset-2 hover:[&_a]:!text-blue-800"
             dangerouslySetInnerHTML={{ __html: processedHtml }}
           />
@@ -362,7 +435,6 @@ export function EmailViewer({
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="max-w-5xl w-[90vw] max-h-[90vh] h-[90vh] overflow-hidden flex flex-col p-0 rounded-2xl gap-0 border-slate-200 shadow-2xl" onPointerDown={(e) => e.stopPropagation()}>
           <div className="flex flex-1 overflow-hidden">
-            {/* Lado Esquerdo - Email Viewer */}
             <div className="flex-1 flex flex-col min-w-0 border-r border-slate-200">
               <DialogHeader className="px-8 py-6 border-b border-slate-100 bg-white space-y-4 shrink-0">
                 <div className="flex items-start justify-between gap-4">
@@ -465,26 +537,31 @@ export function EmailViewer({
                       Anexos ({visibleAttachments.length})
                     </h4>
                     <div className="flex flex-wrap gap-3">
-                      {visibleAttachments.map((attachment: any, index: number) => (
-                        <div
-                          key={index}
-                          onClick={() => handleDownloadAttachment(attachment)}
-                          className="flex items-center gap-3 p-2.5 pr-4 bg-white border border-slate-200 rounded-xl hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer group"
-                          title="Descarregar anexo"
-                        >
-                          <div className="h-8 w-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                            <Download className="h-4 w-4" />
+                      {visibleAttachments.map((attachment: any, index: number) => {
+                        const fileNameLower = (attachment.name || "").toLowerCase();
+                        const opensInBrowser = fileNameLower.endsWith(".pdf") || fileNameLower.endsWith(".jpg") || fileNameLower.endsWith(".png");
+                        
+                        return (
+                          <div
+                            key={index}
+                            onClick={() => handleDownloadAttachment(attachment)}
+                            className="flex items-center gap-3 p-2.5 pr-4 bg-white border border-slate-200 rounded-xl hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer group"
+                            title={opensInBrowser ? "Abrir anexo" : "Descarregar anexo"}
+                          >
+                            <div className="h-8 w-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                              {opensInBrowser ? <Eye className="h-4 w-4" /> : <Download className="h-4 w-4" />}
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-sm font-semibold text-slate-700 truncate max-w-[200px]">
+                                {attachment.name}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-medium">
+                                {formatFileSize(attachment.size)}
+                              </span>
+                            </div>
                           </div>
-                          <div className="flex flex-col min-w-0">
-                            <span className="text-sm font-semibold text-slate-700 truncate max-w-[200px]">
-                              {attachment.name}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-medium">
-                              {formatFileSize(attachment.size)}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </div>
                 )}
@@ -543,6 +620,17 @@ export function EmailViewer({
                     >
                       <Archive className="h-4 w-4 mr-2" />
                       Arquivar
+                    </Button>
+                  )}
+
+                  {!composerMode && (
+                    <Button
+                      variant="ghost"
+                      className="rounded-xl text-red-600 hover:bg-red-50 font-medium"
+                      onClick={() => setIsDeleteDialogOpen(true)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Eliminar
                     </Button>
                   )}
 
@@ -715,6 +803,35 @@ export function EmailViewer({
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-w-sm rounded-2xl" onPointerDown={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-5 w-5" /> Eliminar E-mail
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 pt-2">
+              Tem a certeza de que pretende eliminar esta mensagem? Esta ação moverá o e-mail para a pasta de Itens Eliminados.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2 sm:justify-end mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setIsDeleteDialogOpen(false)}
+              className="rounded-xl h-10 px-6"
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              className="rounded-xl h-10 px-6"
+            >
+              Eliminar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
