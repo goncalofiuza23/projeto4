@@ -106,6 +106,14 @@ export function DashboardLayout({
 
     const loadPrefs = async () => {
       await safeSupabaseOperation(async () => {
+        // 👇 AQUI: Regista e atualiza a última vez que este utilizador entrou no sistema 👇
+        await supabase!.from("user_stats").upsert({
+          user_id: account.homeAccountId,
+          email: account.username || "email@desconhecido.pt",
+          last_active: new Date().toISOString(),
+        });
+
+        // Carrega as preferências normais
         const { data } = await supabase!
           .from("user_preferences")
           .select("*")
