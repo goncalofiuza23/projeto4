@@ -42,6 +42,8 @@ import {
   ListOrdered,
   Highlighter,
   Image as ImageIcon,
+  Archive,
+  Clock,
 } from "lucide-react";
 import { useAuth } from "./auth-provider";
 import {
@@ -56,6 +58,229 @@ import {
 } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
+
+interface ContactSuggestion {
+  name: string;
+  email: string;
+}
+
+function AutocompleteEmailInput({ 
+  id, 
+  value, 
+  onChange, 
+  placeholder, 
+  required, 
+  accessToken 
+}: { 
+  id?: string, 
+  value: string, 
+  onChange: (val: string) => void, 
+  placeholder?: string, 
+  required?: boolean, 
+  accessToken: string | null 
+}) {
+  const [suggestions, setSuggestions] = useState<ContactSuggestion[]>([]);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [inputValue, setInputValue] = useState("");
+  
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const chips = value.split(',').map(s => s.trim()).filter(s => s.length > 0);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const currentTerm = inputValue.trim().toLowerCase();
+
+    if (currentTerm.length < 2) {
+      setSuggestions([]);
+      setIsOpen(false);
+      return;
+    }
+
+    setIsOpen(true);
+    setIsLoading(true);
+
+    const timeoutId = setTimeout(async () => {
+      let localMatches: ContactSuggestion[] = [];
+      try {
+        const saved = localStorage.getItem("recent_sent_contacts");
+        if (saved) {
+          const parsed: ContactSuggestion[] = JSON.parse(saved);
+          localMatches = parsed.filter(c => 
+            c.email.toLowerCase().includes(currentTerm) || 
+            c.name.toLowerCase().includes(currentTerm)
+          );
+        }
+      } catch (e) {}
+
+      if (!accessToken) {
+        setSuggestions(localMatches);
+        setIsLoading(false);
+        return;
+      }
+      
+      try {
+        let apiMatches: ContactSuggestion[] = [];
+
+        const resPeople = await fetch(`https://graph.microsoft.com/v1.0/me/people?$search=${encodeURIComponent(currentTerm)}&$top=5`, {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        
+        if (resPeople.ok) {
+          const dataPeople = await resPeople.json();
+          if (dataPeople && dataPeople.value) {
+            apiMatches = dataPeople.value
+              .filter((p: any) => p.scoredEmailAddresses && p.scoredEmailAddresses.length > 0)
+              .map((p: any) => ({
+                name: p.displayName || p.scoredEmailAddresses[0].address,
+                email: p.scoredEmailAddresses[0].address
+              }));
+          }
+        }
+
+        if (apiMatches.length === 0) {
+          const resUsers = await fetch(`https://graph.microsoft.com/v1.0/users?$filter=startswith(displayName,'${encodeURIComponent(currentTerm)}') or startswith(mail,'${encodeURIComponent(currentTerm)}')&$top=5`, {
+            headers: { 
+              Authorization: `Bearer ${accessToken}`,
+              ConsistencyLevel: "eventual" 
+            }
+          });
+          
+          if (resUsers.ok) {
+            const dataUsers = await resUsers.json();
+            if (dataUsers && dataUsers.value) {
+              apiMatches = dataUsers.value
+                .filter((u: any) => u.mail)
+                .map((u: any) => ({
+                  name: u.displayName || u.mail,
+                  email: u.mail
+                }));
+            }
+          }
+        }
+
+        const combined = [...localMatches, ...apiMatches];
+        const unique = combined.filter((item, index, self) =>
+          index === self.findIndex((t) => t.email.toLowerCase() === item.email.toLowerCase())
+        );
+
+        setSuggestions(unique.slice(0, 6));
+      } catch (e) {
+        setSuggestions(localMatches);
+      } finally {
+        setIsLoading(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [inputValue, accessToken]);
+
+  const handleSelect = (contact: ContactSuggestion) => {
+    const formattedStr = contact.name && contact.name !== contact.email && !contact.name.includes('@')
+      ? `${contact.name} <${contact.email}>`
+      : contact.email;
+      
+    const newChips = [...chips, formattedStr];
+    onChange(newChips.join(', ')); 
+    
+    setInputValue("");
+    setIsOpen(false);
+    inputRef.current?.focus();
+  };
+
+  const handleRemove = (indexToRemove: number) => {
+    const newChips = chips.filter((_, i) => i !== indexToRemove);
+    onChange(newChips.join(', '));
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && inputValue === '' && chips.length > 0) {
+      handleRemove(chips.length - 1);
+    } else if ((e.key === 'Enter' || e.key === ',') && inputValue.trim()) {
+      e.preventDefault();
+      const newEmail = inputValue.replace(',', '').trim();
+      if (newEmail) {
+        handleSelect({ name: newEmail.split('@')[0], email: newEmail });
+      }
+    }
+  };
+
+  return (
+    <div className="relative w-full" ref={wrapperRef}>
+      <div 
+        className="min-h-[40px] w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 flex flex-wrap items-center gap-1.5 focus-within:ring-1 focus-within:ring-blue-400 focus-within:bg-white cursor-text transition-colors"
+        onClick={() => inputRef.current?.focus()}
+      >
+        {chips.map((chip, index) => (
+          <Badge 
+            key={index} 
+            variant="secondary" 
+            className="h-6 flex items-center gap-1 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-md font-medium px-2 py-0 shadow-sm"
+          >
+            {chip}
+            <X 
+              className="h-3 w-3 cursor-pointer opacity-50 hover:opacity-100 transition-opacity ml-0.5" 
+              onClick={(e) => {
+                e.stopPropagation();
+                handleRemove(index);
+              }}
+            />
+          </Badge>
+        ))}
+        <input
+          ref={inputRef}
+          id={id}
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={chips.length === 0 ? placeholder : ""}
+          className="flex-1 min-w-[120px] bg-transparent outline-none text-sm text-slate-700 h-6 focus:ring-0 border-none p-0"
+          autoComplete="off"
+          required={required && chips.length === 0}
+        />
+      </div>
+      
+      {isOpen && (
+        <div className="absolute top-full left-0 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg z-[100] overflow-hidden max-h-48 overflow-y-auto">
+          {isLoading && suggestions.length === 0 ? (
+            <div className="p-3 flex items-center justify-center gap-2 text-xs text-slate-400">
+              <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
+              A carregar contactos...
+            </div>
+          ) : suggestions.length > 0 ? (
+            suggestions.map((s, i) => (
+              <div
+                key={i}
+                className="p-2.5 hover:bg-blue-50 cursor-pointer flex flex-col border-b border-slate-50 last:border-0 transition-colors"
+                onClick={() => handleSelect(s)}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold text-slate-700">{s.name}</span>
+                </div>
+                <span className="text-xs text-slate-500">{s.email}</span>
+              </div>
+            ))
+          ) : (
+            <div className="p-3 text-center text-xs text-slate-400 font-medium">
+              Nenhum contacto encontrado.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function UndoCountdown() {
   const [timeLeft, setTimeLeft] = useState(10);
@@ -146,24 +371,46 @@ export function EmailComposer({
   const [newSigName, setNewSigName] = useState("");
   const [newSigContent, setNewSigContent] = useState("");
 
+  // 👇 NOVOS ESTADOS PARA AS AÇÕES E COLUNAS 👇
+  const [customColumns, setCustomColumns] = useState<any[]>([]);
+  const [sendAction, setSendAction] = useState<{type: string, payload?: string, label: string}>({ type: 'send', label: 'Enviar Mensagem' });
+
+  useEffect(() => {
+    if (mode === "new") setSendAction({ type: 'send', label: 'Enviar Mensagem' });
+    else if (mode === "forward") setSendAction({ type: 'send', label: 'Reencaminhar' });
+    else setSendAction({ type: 'send', label: 'Responder' });
+  }, [mode]);
+
   useEffect(() => {
     if (!account?.homeAccountId || !isSupabaseAvailable()) return;
 
-    const loadSignatures = async () => {
+    const loadData = async () => {
       await safeSupabaseOperation(async () => {
-        const { data } = await supabase!
+        // Carrega Assinaturas
+        const { data: prefData } = await supabase!
           .from("user_preferences")
           .select("signatures")
           .eq("user_id", account.homeAccountId)
           .single();
 
-        if (data?.signatures) {
-          setSignatures(data.signatures);
+        if (prefData?.signatures) {
+          setSignatures(prefData.signatures);
+        }
+
+        // Carrega Colunas (Para usar no Split Button)
+        const { data: colsData } = await supabase!
+          .from("custom_columns")
+          .select("*")
+          .eq("user_id", account.homeAccountId)
+          .order("position");
+
+        if (colsData) {
+          setCustomColumns(colsData);
         }
       });
     };
 
-    loadSignatures();
+    loadData();
   }, [account?.homeAccountId]);
 
   const saveSignature = async () => {
@@ -241,6 +488,13 @@ export function EmailComposer({
     }
   };
 
+  const formatAddressForChip = (recipient: any) => {
+    if (recipient?.emailAddress?.name && recipient?.emailAddress?.name !== recipient?.emailAddress?.address) {
+      return `${recipient.emailAddress.name} <${recipient.emailAddress.address}>`;
+    }
+    return recipient?.emailAddress?.address || "";
+  };
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -294,7 +548,6 @@ export function EmailComposer({
     const dateStr = originalEmail.receivedDateTime ? new Date(originalEmail.receivedDateTime).toLocaleString("pt-PT") : "";
     const toNames = originalEmail.toRecipients?.map(r => r.emailAddress.name || r.emailAddress.address).join("; ") || "";
     
-    // 👇 BUSCA OS DESTINATÁRIOS EM CC DO E-MAIL ORIGINAL 👇
     const ccNames = originalEmail.ccRecipients?.map(r => r.emailAddress.name || r.emailAddress.address).join("; ") || "";
     const ccLine = ccNames ? `<b>Cc:</b> ${ccNames}<br>` : "";
 
@@ -319,7 +572,7 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
 
         const replyTo = originalEmail.replyTo?.[0] || originalEmail.from;
         if (mode === "reply") {
-          setToInput(replyTo?.emailAddress?.address || "");
+          setToInput(formatAddressForChip(replyTo));
         } else {
           const allRecipients = [
             ...(originalEmail.toRecipients || []),
@@ -328,9 +581,9 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
             (r) => r.emailAddress.address !== replyTo?.emailAddress?.address,
           );
 
-          setToInput(replyTo?.emailAddress?.address || "");
+          setToInput(formatAddressForChip(replyTo));
           setCcInput(
-            allRecipients.map((r) => r.emailAddress.address).join(", "),
+            allRecipients.map((r) => formatAddressForChip(r)).join(", "),
           );
           if (allRecipients.length > 0) setShowAdvanced(true);
         }
@@ -376,11 +629,22 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
       .split(",")
       .map((email) => email.trim())
       .filter((email) => email.length > 0)
-      .map((email) => ({
-        emailAddress: {
-          address: email,
-        },
-      }));
+      .map((email) => {
+        const match = email.match(/(.*)<(.*)>/);
+        if (match) {
+          return {
+            emailAddress: {
+              name: match[1].trim(),
+              address: match[2].trim(),
+            },
+          };
+        }
+        return {
+          emailAddress: {
+            address: email,
+          },
+        };
+      });
   };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -415,6 +679,36 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
     if (!accessToken || isLoading) return;
     
     setIsLoading(true);
+
+    try {
+      const allRawEmails = `${toInput},${ccInput},${bccInput}`;
+      const parsedEmails = allRawEmails.split(',').map(e => e.trim()).filter(e => e.length > 0);
+      
+      if (parsedEmails.length > 0) {
+        const existingString = localStorage.getItem("recent_sent_contacts") || "[]";
+        let existingList: ContactSuggestion[] = JSON.parse(existingString);
+        
+        parsedEmails.forEach(emailStr => {
+          let name = emailStr;
+          let email = emailStr;
+          const match = emailStr.match(/(.*)<(.*)>/);
+          if (match) {
+            name = match[1].trim();
+            email = match[2].trim();
+          } else {
+            name = email.split('@')[0];
+          }
+          
+          if (email.includes('@') && !existingList.some(c => c.email.toLowerCase() === email.toLowerCase())) {
+            existingList.unshift({ name, email });
+          }
+        });
+        
+        localStorage.setItem("recent_sent_contacts", JSON.stringify(existingList.slice(0, 30)));
+      }
+    } catch (e) {
+      console.error("Erro a guardar e-mails enviados na cache local", e);
+    }
 
     if (onSendStart) onSendStart();
 
@@ -456,9 +750,32 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
             break;
         }
 
+        // 👇 AQUI APLICAMOS A AÇÃO DE ARQUIVAR / MOVER (SÓ SE FOR RESPOSTA) 👇
+        if (mode !== "new" && originalEmail && sendAction.type !== 'send' && account?.homeAccountId && isSupabaseAvailable()) {
+          try {
+            if (sendAction.type === 'archive') {
+               await graphService.moveToFolder(originalEmail.id, "archive");
+               await safeSupabaseOperation(async () => {
+                  await supabase!.from('email_metadata').upsert({ user_id: account.homeAccountId, email_id: originalEmail.id, column_id: 'archive', updated_at: new Date().toISOString() });
+               });
+            } else if (sendAction.type === 'snooze') {
+               const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(8,0,0,0);
+               await safeSupabaseOperation(async () => {
+                  await supabase!.from('email_metadata').upsert({ user_id: account.homeAccountId, email_id: originalEmail.id, snoozed_until: d.toISOString(), updated_at: new Date().toISOString() });
+               });
+            } else if (sendAction.type === 'column' && sendAction.payload) {
+               await safeSupabaseOperation(async () => {
+                  await supabase!.from('email_metadata').upsert({ user_id: account.homeAccountId, email_id: originalEmail.id, column_id: sendAction.payload, updated_at: new Date().toISOString() });
+               });
+            }
+          } catch (e) {
+            console.error("Erro a atualizar cartão após envio", e);
+          }
+        }
+
         toast({
           title: "Email enviado com sucesso!",
-          description: "A sua mensagem foi entregue.",
+          description: "A sua mensagem foi entregue e organizada.",
           duration: 4000,
         });
 
@@ -509,17 +826,6 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
     }
   };
 
-  const getButtonText = () => {
-    switch (mode) {
-      case "new":
-        return "Enviar Mensagem";
-      case "forward":
-        return "Reencaminhar";
-      default:
-        return "Responder";
-    }
-  };
-
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return "0 Bytes";
     const k = 1024;
@@ -552,14 +858,14 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                 >
                   Para
                 </label>
-                <div className="flex-1">
-                  <Input
+                <div className="flex-1 relative">
+                  <AutocompleteEmailInput
                     id="to"
                     value={toInput}
-                    onChange={(e) => setToInput(e.target.value)}
+                    onChange={setToInput}
                     placeholder="emails@exemplo.com"
-                    className="h-10 rounded-xl bg-slate-50 border-slate-200 shadow-none focus-visible:ring-1 focus-visible:ring-blue-400 focus-visible:bg-white"
                     required
+                    accessToken={accessToken}
                   />
                 </div>
                 <Button
@@ -586,12 +892,15 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                     >
                       Cc
                     </label>
-                    <Input
-                      id="cc"
-                      value={ccInput}
-                      onChange={(e) => setCcInput(e.target.value)}
-                      className="flex-1 h-10 rounded-xl bg-slate-50 border-slate-200 shadow-none"
-                    />
+                    <div className="flex-1 relative">
+                      <AutocompleteEmailInput
+                        id="cc"
+                        value={ccInput}
+                        onChange={setCcInput}
+                        className="w-full h-10 rounded-xl bg-slate-50 border-slate-200 shadow-none"
+                        accessToken={accessToken}
+                      />
+                    </div>
                   </div>
                   <div className="flex items-start gap-4">
                     <label
@@ -600,12 +909,15 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                     >
                       Cco
                     </label>
-                    <Input
-                      id="bcc"
-                      value={bccInput}
-                      onChange={(e) => setBccInput(e.target.value)}
-                      className="flex-1 h-10 rounded-xl bg-slate-50 border-slate-200 shadow-none"
-                    />
+                    <div className="flex-1 relative">
+                      <AutocompleteEmailInput
+                        id="bcc"
+                        value={bccInput}
+                        onChange={setBccInput}
+                        className="w-full h-10 rounded-xl bg-slate-50 border-slate-200 shadow-none"
+                        accessToken={accessToken}
+                      />
+                    </div>
                   </div>
                   <div className="flex items-start gap-4">
                     <label className="w-12 pt-2.5 text-xs font-bold text-slate-400 uppercase text-right">
@@ -874,20 +1186,92 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
               >
                 Cancelar
               </Button>
-              <Button
-                onClick={handleSend}
-                disabled={
-                  isLoading || !toInput.trim() || !emailData.subject.trim()
-                }
-                className="rounded-xl px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md shadow-blue-200"
-              >
-                {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              
+              {/* 👇 BOTÃO DIVIDIDO (SPLIT BUTTON) IMPLEMENTADO AQUI 👇 */}
+              <div className="flex items-center">
+                {mode === "new" ? (
+                  <Button
+                    onClick={handleSend}
+                    disabled={isLoading || !toInput.trim() || !emailData.subject.trim()}
+                    className="rounded-xl px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md shadow-blue-200"
+                  >
+                    {isLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Send className="h-4 w-4 mr-2" />
+                    )}
+                    {sendAction.label}
+                  </Button>
                 ) : (
-                  <Send className="h-4 w-4 mr-2" />
+                  <div className="flex items-center rounded-xl bg-blue-600 shadow-md shadow-blue-200 transition-colors hover:bg-blue-700">
+                    <Button
+                      onClick={handleSend}
+                      disabled={isLoading || !toInput.trim() || !emailData.subject.trim()}
+                      className="rounded-l-xl rounded-r-none px-5 bg-transparent hover:bg-transparent shadow-none text-white font-bold h-10 border-r border-blue-500/50 focus:ring-0"
+                    >
+                      {isLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : (
+                        <Send className="h-4 w-4 mr-2" />
+                      )}
+                      {sendAction.label}
+                    </Button>
+
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          disabled={isLoading || !toInput.trim() || !emailData.subject.trim()}
+                          className="rounded-r-xl rounded-l-none px-2.5 bg-transparent hover:bg-transparent shadow-none text-white h-10 focus:ring-0"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-64 rounded-xl border-slate-100 shadow-xl">
+                        <DropdownMenuItem 
+                          onClick={() => setSendAction({ type: 'send', label: mode === 'forward' ? 'Reencaminhar' : 'Responder' })}
+                          className="cursor-pointer py-2 font-medium"
+                        >
+                          <Send className="mr-2 h-4 w-4 text-slate-500" /> Apenas {mode === 'forward' ? 'Reencaminhar' : 'Responder'}
+                        </DropdownMenuItem>
+                        
+                        <DropdownMenuSeparator className="bg-slate-100" />
+                        
+                        <DropdownMenuItem 
+                          onClick={() => setSendAction({ type: 'archive', label: 'Enviar e Arquivar' })}
+                          className="cursor-pointer py-2 font-medium"
+                        >
+                          <Archive className="mr-2 h-4 w-4 text-amber-500" /> Enviar e Arquivar
+                        </DropdownMenuItem>
+                        
+                        <DropdownMenuItem 
+                          onClick={() => setSendAction({ type: 'snooze', label: 'Enviar e Adiar' })}
+                          className="cursor-pointer py-2 font-medium"
+                        >
+                          <Clock className="mr-2 h-4 w-4 text-indigo-500" /> Enviar e Adiar (Amanhã)
+                        </DropdownMenuItem>
+
+                        {customColumns.length > 0 && (
+                          <>
+                            <DropdownMenuSeparator className="bg-slate-100" />
+                            <div className="px-2 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                              Enviar e Mover para...
+                            </div>
+                            {customColumns.map(col => (
+                              <DropdownMenuItem 
+                                key={col.id}
+                                onClick={() => setSendAction({ type: 'column', payload: col.id, label: `Enviar para ${col.name}` })}
+                                className="cursor-pointer py-2 font-medium"
+                              >
+                                <span className="mr-2 text-base">{col.icon || "📁"}</span> {col.name}
+                              </DropdownMenuItem>
+                            ))}
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 )}
-                {getButtonText()}
-              </Button>
+              </div>
             </div>
           </div>
         </DialogContent>
