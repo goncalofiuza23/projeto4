@@ -23,6 +23,7 @@ import { ColumnManager } from "./column-manager";
 import { EmailComposer } from "./email-composer";
 import { UserAvatar } from "./user-avatar";
 import { useAuth } from "./auth-provider";
+import { useLanguage } from "./language-provider"; 
 import { GraphService } from "@/lib/microsoft-graph";
 import {
   supabase,
@@ -32,23 +33,23 @@ import {
 import { SettingsModal } from "./settings-modal";
 
 export const BACKGROUNDS = [
-  { id: "slate", name: "Padrão", class: "bg-[#f8fafc]", type: "color" },
-  { id: "blue", name: "Azul Noite", class: "bg-slate-900", type: "color" },
+  { id: "slate", nameKey: "bg_slate", class: "bg-[#f8fafc]", type: "color" },
+  { id: "blue", nameKey: "bg_blue", class: "bg-slate-900", type: "color" },
   {
     id: "mountains",
-    name: "Montanhas",
+    nameKey: "bg_mountains",
     url: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1920&q=80",
     type: "image",
   },
   {
     id: "ocean",
-    name: "Oceano",
+    nameKey: "bg_ocean",
     url: "https://images.unsplash.com/photo-1505118380757-91f5f5632de0?auto=format&fit=crop&w=1920&q=80",
     type: "image",
   },
   {
     id: "forest",
-    name: "Floresta",
+    nameKey: "bg_forest",
     url: "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?auto=format&fit=crop&w=1920&q=80",
     type: "image",
   },
@@ -78,6 +79,9 @@ export function DashboardLayout({
   onViewChange,
 }: DashboardLayoutProps) {
   const { account, accessToken, logout } = useAuth();
+  
+  const { t } = useLanguage(); 
+  
   const [currentBg, setCurrentBg] = useState(BACKGROUNDS[0]);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -106,14 +110,12 @@ export function DashboardLayout({
 
     const loadPrefs = async () => {
       await safeSupabaseOperation(async () => {
-        // 👇 AQUI: Regista e atualiza a última vez que este utilizador entrou no sistema 👇
         await supabase!.from("user_stats").upsert({
           user_id: account.homeAccountId,
           email: account.username || "email@desconhecido.pt",
           last_active: new Date().toISOString(),
         });
 
-        // Carrega as preferências normais
         const { data } = await supabase!
           .from("user_preferences")
           .select("*")
@@ -230,10 +232,10 @@ export function DashboardLayout({
               </div>
               <div className="min-w-0">
                 <h2 className="text-sm font-bold text-slate-900 leading-none tracking-tight truncate">
-                  Gestor de Emails
+                  {t("app_title")}
                 </h2>
                 <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 truncate">
-                  Kanban Dashboard
+                  {t("app_subtitle")}
                 </p>
               </div>
             </div>
@@ -244,7 +246,7 @@ export function DashboardLayout({
             size="icon"
             onClick={toggleSidebar}
             className="shrink-0 text-slate-400 hover:text-slate-700 hover:bg-slate-200/50"
-            title={isSidebarCollapsed ? "Expandir menu" : "Recolher menu"}
+            title={isSidebarCollapsed ? t("expand_menu") : t("collapse_menu")}
           >
             {isSidebarCollapsed ? (
               <PanelLeftOpen className="h-5 w-5" />
@@ -258,7 +260,7 @@ export function DashboardLayout({
           <div className="px-3">
             <Button
               onClick={() => setIsComposerOpen(true)}
-              title="Novo E-mail"
+              title={t("new_email")}
               className={`w-full bg-blue-600 hover:bg-blue-700 text-white h-11 rounded-xl shadow-md transition-all active:scale-95 ${
                 isSidebarCollapsed
                   ? "justify-center px-0"
@@ -267,7 +269,7 @@ export function DashboardLayout({
             >
               <Plus className="h-5 w-5 shrink-0" />
               {!isSidebarCollapsed && (
-                <span className="font-bold text-xs truncate">Novo E-mail</span>
+                <span className="font-bold text-xs truncate">{t("new_email")}</span>
               )}
             </Button>
           </div>
@@ -275,25 +277,25 @@ export function DashboardLayout({
           <div className="space-y-0.5 px-2">
             {!isSidebarCollapsed && (
               <p className="text-[10px] font-bold text-slate-400 uppercase px-2 mb-2 truncate">
-                Caixa de Entrada
+                {t("menu_inbox_group")}
               </p>
             )}
-            {renderMenuItem("kanban", LayoutDashboard, "O meu Kanban")}
-            {renderMenuItem("sent", Send, "Enviados")}
-            {renderMenuItem("snoozed", Clock, "Adiados (Snooze)")}
-            {renderMenuItem("archived", Archive, "Arquivados")}
-            {renderMenuItem("spam", AlertOctagon, "Spam")}
-            {renderMenuItem("deleted", Trash2, "Eliminados")}
+            {renderMenuItem("kanban", LayoutDashboard, t("menu_kanban"))}
+            {renderMenuItem("sent", Send, t("menu_sent"))}
+            {renderMenuItem("snoozed", Clock, t("menu_snoozed"))}
+            {renderMenuItem("archived", Archive, t("menu_archived"))}
+            {renderMenuItem("spam", AlertOctagon, t("menu_spam"))}
+            {renderMenuItem("deleted", Trash2, t("menu_deleted"))}
           </div>
 
           <div className="space-y-0.5 px-2">
             {!isSidebarCollapsed && (
               <p className="text-[10px] font-bold text-slate-400 uppercase px-2 mb-2 truncate">
-                As Minhas Colunas
+                {t("menu_columns_group")}
               </p>
             )}
             <div className="max-h-[128px] overflow-y-auto custom-scrollbar pr-1 space-y-0.5">
-              {renderMenuItem("col_inbox", "📥", "Caixa de Entrada", true)}
+              {renderMenuItem("col_inbox", "📥", t("col_inbox"), true)}
               {customColumns.map((col) =>
                 renderMenuItem(
                   `col_${col.id}`,
@@ -309,7 +311,7 @@ export function DashboardLayout({
                 className={`pt-2 ${isSidebarCollapsed ? "flex justify-center" : ""}`}
               >
                 <div
-                  title="Gerir Colunas"
+                  title={t("manage_columns")}
                   className={
                     isSidebarCollapsed
                       ? "[&_button]:w-10 [&_button]:h-10 [&_button]:p-0 [&_button]:flex [&_button]:justify-center [&_button]:items-center [&_button]:bg-transparent [&_button]:border-none [&_button]:shadow-none [&_button]:text-[0px] [&_button]:text-transparent [&_button_svg]:text-slate-400 hover:[&_button]:text-blue-600 hover:[&_button]:bg-slate-100 [&_button_span]:hidden [&_button_svg]:!m-0 [&_button_svg]:w-5 [&_button_svg]:h-5 transition-colors rounded-xl"
@@ -328,14 +330,14 @@ export function DashboardLayout({
           <div className="space-y-0.5 px-2">
             {!isSidebarCollapsed && (
               <p className="text-[10px] font-bold text-slate-400 uppercase px-2 mb-2 truncate">
-                Ferramentas
+                {t("menu_tools_group")}
               </p>
             )}
 
             <Button
               variant="ghost"
               onClick={onToggleFilters}
-              title="Filtros"
+              title={isFiltersVisible ? t("hide_filters") : t("show_filters")}
               className={`w-full h-10 rounded-xl transition-all ${
                 isFiltersVisible
                   ? "bg-blue-50 text-blue-700 font-semibold"
@@ -347,7 +349,7 @@ export function DashboardLayout({
               />
               {!isSidebarCollapsed && (
                 <span className="text-xs truncate">
-                  {isFiltersVisible ? "Ocultar Filtros" : "Mostrar Filtros"}
+                  {isFiltersVisible ? t("hide_filters") : t("show_filters")}
                 </span>
               )}
             </Button>
@@ -361,7 +363,7 @@ export function DashboardLayout({
             <div
               className={`flex items-center gap-2 ${isSidebarCollapsed ? "justify-center" : "min-w-0"} flex-1 cursor-pointer hover:opacity-80 transition-opacity`}
               onClick={() => setIsSettingsModalOpen(true)}
-              title="Abrir Definições"
+              title={t("open_settings")}
             >
               <UserAvatar
                 name={account?.name}
@@ -372,10 +374,10 @@ export function DashboardLayout({
               {!isSidebarCollapsed && (
                 <div className="min-w-0">
                   <p className="text-[10px] font-bold text-slate-900 truncate leading-tight">
-                    {account?.name || "Utilizador"}
+                    {account?.name || t("user_default")}
                   </p>
                   <p className="text-[9px] text-slate-500 font-medium truncate flex items-center gap-1 mt-0.5">
-                    <Settings className="h-3 w-3" /> Definições
+                    <Settings className="h-3 w-3" /> {t("settings")}
                   </p>
                 </div>
               )}
@@ -385,7 +387,7 @@ export function DashboardLayout({
               variant="ghost"
               size="icon"
               onClick={handleLogout}
-              title="Terminar Sessão"
+              title={t("logout")}
               className={`h-8 w-8 shrink-0 text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors ${isSidebarCollapsed ? "mx-auto" : ""}`}
             >
               <LogOut className="h-4 w-4" />

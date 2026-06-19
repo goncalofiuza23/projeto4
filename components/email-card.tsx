@@ -25,6 +25,7 @@ import type { EmailMetadata } from "@/lib/supabase";
 import { EmailViewer } from "./email-viewer";
 import { GraphService } from "@/lib/microsoft-graph";
 import { useState } from "react";
+import { useLanguage } from "./language-provider";
 
 interface EmailCardProps {
   email: Email;
@@ -51,6 +52,8 @@ export function EmailCard({
   metadata,
   onUpdateMetadata,
 }: EmailCardProps) {
+  const { t, language } = useLanguage();
+  
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newTag, setNewTag] = useState("");
   const [priority, setPriority] = useState(metadata?.priority || "media");
@@ -80,12 +83,15 @@ export function EmailCard({
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return new Date(dateString).toLocaleDateString(
+      language === "en" ? "en-US" : "pt-PT", 
+      {
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      }
+    );
   };
 
   const graphService = new GraphService("");
@@ -104,18 +110,18 @@ export function EmailCard({
                 className="font-medium text-sm truncate hover:text-blue-600 transition-colors"
                 title={email.subject}
               >
-                {email.subject || "(Sem assunto)"}
+                {email.subject || t("no_subject")}
               </h3>
               <p className="text-xs text-muted-foreground mt-1">
                 {isEmailSent ? (
                   <>
-                    Para:{" "}
+                    {t("to_prefix")}{" "}
                     {email.toRecipients?.[0]?.emailAddress?.name ||
                       email.toRecipients?.[0]?.emailAddress?.address}
                   </>
                 ) : (
                   <>
-                    De:{" "}
+                    {t("from_prefix")}{" "}
                     {email.from?.emailAddress?.name ||
                       email.from?.emailAddress?.address}
                   </>
@@ -134,11 +140,11 @@ export function EmailCard({
               </DialogTrigger>
               <DialogContent className="max-w-md">
                 <DialogHeader>
-                  <DialogTitle>Configurações do Email</DialogTitle>
+                  <DialogTitle>{t("email_settings")}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="priority">Prioridade</Label>
+                    <Label htmlFor="priority">{t("priority_label")}</Label>
                     <Select
                       value={priority}
                       onValueChange={handlePriorityChange}
@@ -147,24 +153,24 @@ export function EmailCard({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="baixa">🟢 Baixa</SelectItem>
-                        <SelectItem value="media">🟡 Média</SelectItem>
-                        <SelectItem value="alta">🟠 Alta</SelectItem>
-                        <SelectItem value="urgente">🔴 Urgente</SelectItem>
+                        <SelectItem value="baixa">🟢 {t("priority_low")}</SelectItem>
+                        <SelectItem value="media">🟡 {t("priority_medium")}</SelectItem>
+                        <SelectItem value="alta">🟠 {t("priority_high")}</SelectItem>
+                        <SelectItem value="urgente">🔴 {t("priority_urgent")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label htmlFor="tags">Tags</Label>
+                    <Label htmlFor="tags">{t("tags_label")}</Label>
                     <div className="flex gap-2 mt-1">
                       <Input
                         value={newTag}
                         onChange={(e) => setNewTag(e.target.value)}
-                        placeholder="Nova tag"
+                        placeholder={t("new_tag_placeholder")}
                         onKeyPress={(e) => e.key === "Enter" && handleAddTag()}
                       />
                       <Button onClick={handleAddTag} size="sm">
-                        Adicionar
+                        {t("add_btn")}
                       </Button>
                     </div>
                     <div className="flex flex-wrap gap-1 mt-2">
@@ -199,13 +205,13 @@ export function EmailCard({
               {email.hasAttachments && <Paperclip className="h-3 w-3" />}
               {!email.isRead && (
                 <Badge variant="secondary" className="text-xs">
-                  Novo
+                  {t("badge_new")}
                 </Badge>
               )}
               {isEmailSent && (
                 <Badge variant="outline" className="text-xs">
                   <Send className="h-3 w-3 mr-1" />
-                  Enviado
+                  {t("badge_sent")}
                 </Badge>
               )}
             </div>

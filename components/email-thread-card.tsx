@@ -52,6 +52,7 @@ import {
 } from "@/components/ui/select";
 import { UserAvatar } from "./user-avatar";
 import { useAuth } from "./auth-provider";
+import { useLanguage } from "./language-provider";
 import { GraphService } from "@/lib/microsoft-graph";
 import { useToast } from "@/hooks/use-toast";
 
@@ -67,13 +68,6 @@ interface EmailThreadCardProps {
   isSnoozedView?: boolean;
 }
 
-const priorityIcons = {
-  baixa: { icon: "🟢", label: "Baixa", color: "text-green-600 bg-green-50" },
-  media: { icon: "🟡", label: "Média", color: "text-yellow-600 bg-yellow-50" },
-  alta: { icon: "🟠", label: "Alta", color: "text-orange-600 bg-orange-50" },
-  urgente: { icon: "🔴", label: "Urgente", color: "text-red-600 bg-red-50" },
-};
-
 export const EmailThreadCard = memo(function EmailThreadCard({
   thread,
   emailsMetadata,
@@ -86,7 +80,16 @@ export const EmailThreadCard = memo(function EmailThreadCard({
   isSnoozedView = false,
 }: EmailThreadCardProps) {
   const { accessToken } = useAuth();
+  const { t, language } = useLanguage();
   const { toast } = useToast();
+  
+  const priorityIcons = {
+    baixa: { icon: "🟢", label: t("priority_low_text"), color: "text-green-600 bg-green-50" },
+    media: { icon: "🟡", label: t("priority_medium_text"), color: "text-yellow-600 bg-yellow-50" },
+    alta: { icon: "🟠", label: t("priority_high_text"), color: "text-orange-600 bg-orange-50" },
+    urgente: { icon: "🔴", label: t("priority_urgent_text"), color: "text-red-600 bg-red-50" },
+  };
+
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -117,7 +120,6 @@ export const EmailThreadCard = memo(function EmailThreadCard({
     });
   }, [thread.emails]);
 
-  // 👇 NOVA METRICA: Calcula quantos e-mails individuais da conversação estão por ler 👇
   const unreadEmailsCount = useMemo(() => {
     return uniqueEmails.filter((e) => !e.isRead).length;
   }, [uniqueEmails]);
@@ -125,13 +127,15 @@ export const EmailThreadCard = memo(function EmailThreadCard({
   const formatDateShort = (dateString: string) => {
     const date = new Date(dateString);
     const today = new Date();
+    const locale = language === "en" ? "en-US" : "pt-PT";
+
     if (date.toDateString() === today.toDateString()) {
-      return date.toLocaleTimeString("pt-PT", {
+      return date.toLocaleTimeString(locale, {
         hour: "2-digit",
         minute: "2-digit",
       });
     }
-    return date.toLocaleDateString("pt-PT", { day: "numeric", month: "short" });
+    return date.toLocaleDateString(locale, { day: "numeric", month: "short" });
   };
 
   const getParticipantsDisplay = () => {
@@ -152,7 +156,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
   const hasAttachments = uniqueEmails.some((e) => e.hasAttachments);
   const isUnread = thread.hasUnread;
 
-  const priorities = ["urgente", "alta", "media", "baixa"];
+  const prioritiesList = ["urgente", "alta", "media", "baixa"];
   let highestPriority: string | null = null;
   let snoozedUntilDate: string | null = null;
   let subtasks: Subtask[] = [];
@@ -164,8 +168,8 @@ export const EmailThreadCard = memo(function EmailThreadCard({
       if (!highestPriority) {
         highestPriority = metadata.priority;
       } else {
-        const currentIndex = priorities.indexOf(metadata.priority);
-        const highestIndex = priorities.indexOf(highestPriority);
+        const currentIndex = prioritiesList.indexOf(metadata.priority);
+        const highestIndex = prioritiesList.indexOf(highestPriority);
         if (currentIndex < highestIndex) {
           highestPriority = metadata.priority;
         }
@@ -304,8 +308,8 @@ export const EmailThreadCard = memo(function EmailThreadCard({
     });
     setIsSnoozeModalOpen(false);
     toast({
-      title: "E-mail Adiado (Snoozed)",
-      description: `A mensagem reaparecerá no dia ${date.toLocaleDateString("pt-PT", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}.`,
+      title: t("snoozed_success"),
+      description: `${t("snoozed_desc")} ${date.toLocaleDateString(language === "en" ? "en-US" : "pt-PT", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}.`,
     });
   };
 
@@ -341,8 +345,8 @@ export const EmailThreadCard = memo(function EmailThreadCard({
       onUpdateMetadata(e.id, { snoozed_until: null });
     });
     toast({
-      title: "Snooze Cancelado",
-      description: "O e-mail voltou a estar ativo no Kanban.",
+      title: t("snooze_cancelled"),
+      description: t("snooze_cancelled_desc"),
     });
   };
 
@@ -357,8 +361,8 @@ export const EmailThreadCard = memo(function EmailThreadCard({
       );
       uniqueEmails.forEach((e) => onUpdateMetadata(e.id, { column_id: "archive" }));
       toast({
-        title: "Conversa Arquivada",
-        description: "Movida para a pasta de Arquivo do Outlook.",
+        title: t("archive_success"),
+        description: t("archive_desc"),
       });
       setTimeout(() => {
         if (onEmailSent) onEmailSent();
@@ -366,8 +370,8 @@ export const EmailThreadCard = memo(function EmailThreadCard({
     } catch (e) {
       setIsVisuallyHidden(false);
       toast({
-        title: "Erro",
-        description: "Falha ao arquivar e-mail",
+        title: t("error_title"),
+        description: t("archive_error"),
         variant: "destructive",
       });
     } finally {
@@ -385,8 +389,8 @@ export const EmailThreadCard = memo(function EmailThreadCard({
         uniqueEmails.map((e) => graphService.moveToFolder(e.id, "inbox")),
       );
       toast({
-        title: "Restaurado",
-        description: "Conversa movida para a Caixa de Entrada.",
+        title: t("restore_success"),
+        description: t("restore_desc"),
       });
       setTimeout(() => {
         if (onEmailSent) onEmailSent();
@@ -394,8 +398,8 @@ export const EmailThreadCard = memo(function EmailThreadCard({
     } catch (e) {
       setIsVisuallyHidden(false);
       toast({
-        title: "Erro",
-        description: "Falha ao restaurar e-mail",
+        title: t("error_title"),
+        description: t("restore_error"),
         variant: "destructive",
       });
     } finally {
@@ -414,8 +418,8 @@ export const EmailThreadCard = memo(function EmailThreadCard({
       );
       uniqueEmails.forEach((e) => onUpdateMetadata(e.id, { column_id: "spam" }));
       toast({
-        title: "Spam",
-        description: "Conversa movida para Lixo Eletrónico.",
+        title: t("spam_success"),
+        description: t("spam_desc"),
       });
       setTimeout(() => {
         if (onEmailSent) onEmailSent();
@@ -423,8 +427,8 @@ export const EmailThreadCard = memo(function EmailThreadCard({
     } catch (e) {
       setIsVisuallyHidden(false);
       toast({
-        title: "Erro",
-        description: "Falha ao marcar como Spam",
+        title: t("error_title"),
+        description: t("spam_error"),
         variant: "destructive",
       });
     } finally {
@@ -448,8 +452,8 @@ export const EmailThreadCard = memo(function EmailThreadCard({
           uniqueEmails.map((e) => graphService.deleteMessage(e.id)),
         );
         toast({
-          title: "Eliminado Definitivamente",
-          description: "A conversa foi removida permanentemente.",
+          title: t("delete_success_forever"),
+          description: t("delete_desc_forever"),
         });
       } else {
         await Promise.all(
@@ -461,8 +465,8 @@ export const EmailThreadCard = memo(function EmailThreadCard({
           onUpdateMetadata(e.id, { column_id: "deleted" }),
         );
         toast({
-          title: "Eliminado",
-          description: "Conversa movida para os Itens Eliminados.",
+          title: t("delete_success"),
+          description: t("delete_desc"),
         });
       }
       setTimeout(() => {
@@ -471,10 +475,10 @@ export const EmailThreadCard = memo(function EmailThreadCard({
     } catch (e) {
       setIsVisuallyHidden(false);
       toast({
-        title: "Erro",
+        title: t("error_title"),
         description: isDeletedView
-          ? "Falha ao eliminar definitivamente"
-          : "Falha ao eliminar e-mail",
+          ? t("delete_error_forever")
+          : t("delete_error"),
         variant: "destructive",
       });
     } finally {
@@ -531,7 +535,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                           className="cursor-pointer py-2 rounded-lg font-medium text-indigo-600 focus:text-indigo-700 focus:bg-indigo-50"
                         >
                           <BellRing className="mr-2 h-4 w-4" />
-                          Despertar Agora
+                          {t("snooze_wake")}
                         </DropdownMenuItem>
                       ) : (
                         <DropdownMenuItem
@@ -540,8 +544,8 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                         >
                           <Inbox className="mr-2 h-4 w-4" />
                           {isSpamView
-                            ? "Não é Spam"
-                            : "Mover para Caixa de Entrada"}
+                            ? t("restore_not_spam")
+                            : t("restore_inbox")}
                         </DropdownMenuItem>
                       )}
 
@@ -551,7 +555,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                         className="cursor-pointer py-2 rounded-lg font-medium text-red-600 focus:text-red-700 focus:bg-red-50"
                       >
                         <Trash2 className="mr-2 h-4 w-4" />
-                        {isDeletedView ? "Eliminar para Sempre" : "Eliminar"}
+                        {isDeletedView ? t("delete_forever") : t("delete_normal")}
                       </DropdownMenuItem>
                     </>
                   ) : (
@@ -561,7 +565,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                         className="cursor-pointer py-2 rounded-lg font-medium"
                       >
                         <Settings className="mr-2 h-4 w-4 text-slate-500" />
-                        Gerir Prazos e Tags
+                        {t("manage_tags_deadlines")}
                       </DropdownMenuItem>
 
                       <DropdownMenuSeparator className="bg-slate-100" />
@@ -571,7 +575,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                         className="cursor-pointer py-2 rounded-lg font-medium"
                       >
                         <BellRing className="mr-2 h-4 w-4 text-slate-500" />
-                        Snooze (Adiar)
+                        {t("snooze_title").replace(" E-mail", "")}
                       </DropdownMenuItem>
 
                       <DropdownMenuSeparator className="bg-slate-100" />
@@ -581,21 +585,21 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                         className="cursor-pointer py-2 rounded-lg font-medium"
                       >
                         <Archive className="mr-2 h-4 w-4 text-slate-500" />
-                        Arquivar
+                        {t("archive_btn")}
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={actionSpam}
                         className="cursor-pointer py-2 rounded-lg text-amber-600 focus:text-amber-700 focus:bg-amber-50"
                       >
                         <AlertOctagon className="mr-2 h-4 w-4" />
-                        Marcar como Spam
+                        {t("spam_mark")}
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={confirmDelete}
                         className="cursor-pointer py-2 rounded-lg text-red-600 focus:text-red-700 focus:bg-red-50"
                       >
                         <Trash2 className="mr-2 h-4 w-4" />
-                        Eliminar
+                        {t("delete_normal")}
                       </DropdownMenuItem>
                     </>
                   )}
@@ -612,8 +616,8 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                   className="h-8 w-8 flex-shrink-0 shadow-sm text-[10px]"
                 />
                 {highestPriority && (
-                  <span className="text-[10px]">
-                    {priorityIcons[highestPriority as keyof typeof priorityIcons].icon}
+                  <span className="text-[10px]" title={priorityIcons[highestPriority as keyof typeof priorityIcons]?.label}>
+                    {priorityIcons[highestPriority as keyof typeof priorityIcons]?.icon}
                   </span>
                 )}
               </div>
@@ -642,10 +646,9 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                   {uniqueEmails.length > 1 && (
                     <Badge
                       variant="secondary"
-                      // 👇 ATUALIZADO: Mostra a quantidade de mensagens e quantas estão por ler 👇
                       className="ml-1.5 text-[9px] px-1 py-0 h-3 bg-slate-100 text-slate-500 align-middle font-medium"
                     >
-                      {uniqueEmails.length} msg {unreadEmailsCount > 0 ? `(${unreadEmailsCount} por ler)` : ""}
+                      {uniqueEmails.length} {t("msg_count")} {unreadEmailsCount > 0 ? `(${unreadEmailsCount} ${t("unread_badge")})` : ""}
                     </Badge>
                   )}
                 </h3>
@@ -666,7 +669,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                   className={`text-[9px] px-1 py-0 h-4 flex items-center gap-1 ${getDueDateStyles(cardDueDate)}`}
                 >
                   <Calendar className="h-2 w-2" />
-                  {new Date(cardDueDate).toLocaleDateString("pt-PT", { day: "2-digit", month: "short" })}
+                  {new Date(cardDueDate).toLocaleDateString(language === "en" ? "en-US" : "pt-PT", { day: "2-digit", month: "short" })}
                 </Badge>
               )}
 
@@ -690,8 +693,8 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                   <div className="flex items-center gap-1.5">
                     <BellRing className="h-3 w-3 text-indigo-500" />
                     <span className="text-[10px] font-bold text-indigo-700">
-                      Acorda a:{" "}
-                      {new Date(snoozedUntilDate).toLocaleDateString("pt-PT", {
+                      {t("snooze_wakes_at")}{" "}
+                      {new Date(snoozedUntilDate).toLocaleDateString(language === "en" ? "en-US" : "pt-PT", {
                         day: "numeric",
                         month: "short",
                       })}
@@ -736,7 +739,6 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                 {uniqueEmails.map((item) => (
                   <div
                     key={item.id}
-                    // 👇 ATUALIZADO: Adiciona uma borda e sombra azul suave nos que não foram lidos 👇
                     className={`flex items-start gap-2 p-1.5 rounded-lg transition-colors cursor-pointer border ${
                       !item.isRead
                         ? "bg-white border-blue-200 shadow-sm ring-1 ring-blue-50/50"
@@ -761,19 +763,17 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1">
-                        {/* 👇 ATUALIZADO: Força fonte 'font-bold text-slate-900' se não estiver lido 👇 */}
                         <span
                           className={`text-[10px] truncate ${!item.isRead ? "font-bold text-slate-900" : "font-medium text-slate-500"}`}
                         >
                           {item.isFromMe
-                            ? "Você"
+                            ? t("you_sender")
                             : item.from?.emailAddress?.name}
                         </span>
                         <span className={`text-[8px] whitespace-nowrap ${!item.isRead ? "font-bold text-blue-600" : "text-slate-400"}`}>
                           {formatDateShort(item.receivedDateTime)}
                         </span>
                       </div>
-                      {/* 👇 ATUALIZADO: O resumo do texto também fica a negrito 'font-bold text-slate-800' nos não lidos 👇 */}
                       <p className={`text-[9px] truncate ${!item.isRead ? "font-bold text-slate-800" : "text-slate-400"}`}>
                         {item.bodyPreview}
                       </p>
@@ -789,13 +789,13 @@ export const EmailThreadCard = memo(function EmailThreadCard({
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
         <DialogContent className="max-w-md rounded-2xl">
           <DialogHeader>
-            <DialogTitle>Gerir Definições do E-mail</DialogTitle>
+            <DialogTitle>{t("email_settings")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-5 py-4">
             
             <div className="space-y-2">
               <Label className="text-xs font-bold text-slate-500 uppercase">
-                Data Limite (Prazo)
+                {t("due_date_label")}
               </Label>
               <Input
                 type="date"
@@ -810,18 +810,18 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                 htmlFor="priority"
                 className="text-xs font-bold text-slate-500 uppercase"
               >
-                Prioridade
+                {t("priority_label")}
               </Label>
               <Select value={priority || "nenhuma"} onValueChange={handlePriorityChange}>
                 <SelectTrigger className="h-10 rounded-xl bg-slate-50 border-slate-200">
-                  <SelectValue placeholder="Selecione a prioridade..." />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl">
-                  <SelectItem value="nenhuma">⚪ Nenhuma Prioridade</SelectItem>
-                  <SelectItem value="baixa">🟢 Baixa</SelectItem>
-                  <SelectItem value="media">🟡 Média</SelectItem>
-                  <SelectItem value="alta">🟠 Alta</SelectItem>
-                  <SelectItem value="urgente">🔴 Urgente</SelectItem>
+                  <SelectItem value="nenhuma">⚪ {t("priority_none")}</SelectItem>
+                  <SelectItem value="baixa">🟢 {t("priority_low_text")}</SelectItem>
+                  <SelectItem value="media">🟡 {t("priority_medium_text")}</SelectItem>
+                  <SelectItem value="alta">🟠 {t("priority_high_text")}</SelectItem>
+                  <SelectItem value="urgente">🔴 {t("priority_urgent_text")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -830,20 +830,21 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                 htmlFor="tags"
                 className="text-xs font-bold text-slate-500 uppercase"
               >
-                Adicionar Tags
+                {t("add_tags_label")}
               </Label>
               <div className="flex gap-2">
                 <Input
                   value={newTag}
                   onChange={(e) => setNewTag(e.target.value)}
                   className="h-10 rounded-xl bg-slate-50 border-slate-200"
+                  placeholder={t("tag_placeholder")}
                   onKeyPress={(e) => e.key === "Enter" && handleAddTag()}
                 />
                 <Button
                   onClick={handleAddTag}
                   className="h-10 rounded-xl px-6 bg-slate-900 text-white hover:bg-slate-800"
                 >
-                  Adicionar
+                  {t("add_btn")}
                 </Button>
               </div>
               <div className="flex flex-wrap gap-2 mt-3">
@@ -868,8 +869,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
         <DialogContent className="max-w-sm rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-slate-800">
-              <BellRing className="h-5 w-5 text-indigo-600" /> Adiar E-mail
-              (Snooze)
+              <BellRing className="h-5 w-5 text-indigo-600" /> {t("snooze_title")}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-4">
@@ -879,27 +879,26 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                 className="justify-start h-12 rounded-xl text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition-all"
                 onClick={snoozeOptions.laterToday}
               >
-                <Sunset className="mr-3 h-5 w-5 opacity-70" /> Mais logo (Daqui
-                a 4h)
+                <Sunset className="mr-3 h-5 w-5 opacity-70" /> {t("snooze_later_today")}
               </Button>
               <Button
                 variant="outline"
                 className="justify-start h-12 rounded-xl text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition-all"
                 onClick={snoozeOptions.tomorrow}
               >
-                <Sunrise className="mr-3 h-5 w-5 opacity-70" /> Amanhã de Manhã
+                <Sunrise className="mr-3 h-5 w-5 opacity-70" /> {t("snooze_tomorrow")}
               </Button>
               <Button
                 variant="outline"
                 className="justify-start h-12 rounded-xl text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition-all"
                 onClick={snoozeOptions.nextWeek}
               >
-                <Calendar className="mr-3 h-5 w-5 opacity-70" /> Próxima Semana
+                <Calendar className="mr-3 h-5 w-5 opacity-70" /> {t("snooze_next_week")}
               </Button>
             </div>
             <div className="pt-4 mt-2 border-t border-slate-100 space-y-2">
               <Label className="text-xs font-bold text-slate-500 uppercase">
-                Escolher Data Específica
+                {t("snooze_custom_date")}
               </Label>
               <div className="flex gap-2">
                 <Input
@@ -913,7 +912,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                   disabled={!customSnoozeDate}
                   className="h-11 rounded-xl px-4 bg-indigo-600 hover:bg-indigo-700 text-white"
                 >
-                  Confirmar
+                  {t("snooze_confirm")}
                 </Button>
               </div>
             </div>
@@ -925,12 +924,12 @@ export const EmailThreadCard = memo(function EmailThreadCard({
         <DialogContent className="max-w-sm rounded-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
-              <AlertTriangle className="h-5 w-5" /> Eliminar E-mail
+              <AlertTriangle className="h-5 w-5" /> {t("delete_modal_title")}
             </DialogTitle>
             <DialogDescription className="text-slate-500 pt-2">
               {isDeletedView
-                ? "Esta ação irá apagar a conversa permanentemente. Não poderá ser recuperada."
-                : "Tem a certeza de que pretende eliminar esta conversa? Esta ação moverá os e-mails para a pasta de Itens Eliminados."}
+                ? t("delete_modal_desc_forever")
+                : t("delete_modal_desc")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex gap-2 sm:justify-end mt-4">
@@ -939,14 +938,14 @@ export const EmailThreadCard = memo(function EmailThreadCard({
               onClick={() => setIsDeleteDialogOpen(false)}
               className="rounded-xl h-10 px-6"
             >
-              Cancelar
+              {t("cancel_btn")}
             </Button>
             <Button
               variant="destructive"
               onClick={executeDelete}
               className="rounded-xl h-10 px-6"
             >
-              Eliminar
+              {t("delete_normal")}
             </Button>
           </DialogFooter>
         </DialogContent>

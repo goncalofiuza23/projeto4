@@ -25,6 +25,7 @@ import {
   CalendarDays,
   Plus,
 } from "lucide-react";
+import { useLanguage } from "./language-provider";
 
 export interface EmailFilters {
   search: string;
@@ -55,6 +56,7 @@ export function FiltersPanel({
   isVisible,
   onToggleVisibility,
 }: FiltersPanelProps) {
+  const { t } = useLanguage();
   const [tempTag, setTempTag] = useState("");
 
   const updateFilter = (key: keyof EmailFilters, value: any) => {
@@ -134,10 +136,10 @@ export function FiltersPanel({
         className="mb-6 bg-white/80 backdrop-blur-sm border-slate-200/60 shadow-sm hover:shadow-md hover:bg-white text-slate-600 rounded-xl transition-all h-10 px-4"
       >
         <Filter className="h-4 w-4 mr-2 text-blue-500" />
-        <span className="font-semibold">Mostrar Filtros</span>
+        <span className="font-semibold">{t("filter_show")}</span>
         {hasActiveFilters() && (
           <Badge className="ml-3 bg-blue-100 text-blue-700 hover:bg-blue-200 border-none rounded-full px-2 py-0.5 text-xs font-bold">
-            {activeFiltersCount} ativo{activeFiltersCount > 1 ? "s" : ""}
+            {activeFiltersCount} {activeFiltersCount > 1 ? t("filter_active_plural") : t("filter_active_single")}
           </Badge>
         )}
       </Button>
@@ -147,27 +149,27 @@ export function FiltersPanel({
   const priorities = [
     {
       value: "baixa",
-      label: "Baixa",
+      label: t("filter_priority_low"),
       icon: "🟢",
       color: "hover:bg-green-50 text-green-700 border-green-200 bg-green-50/50",
     },
     {
       value: "media",
-      label: "Média",
+      label: t("filter_priority_medium"),
       icon: "🟡",
       color:
         "hover:bg-yellow-50 text-yellow-700 border-yellow-200 bg-yellow-50/50",
     },
     {
       value: "alta",
-      label: "Alta",
+      label: t("filter_priority_high"),
       icon: "🟠",
       color:
         "hover:bg-orange-50 text-orange-700 border-orange-200 bg-orange-50/50",
     },
     {
       value: "urgente",
-      label: "Urgente",
+      label: t("filter_priority_urgent"),
       icon: "🔴",
       color: "hover:bg-red-50 text-red-700 border-red-200 bg-red-50/50",
     },
@@ -182,7 +184,7 @@ export function FiltersPanel({
               <Filter className="h-5 w-5 text-blue-600" />
             </div>
             <h3 className="font-bold text-slate-800 text-lg tracking-tight">
-              Filtros de Pesquisa
+              {t("filter_title")}
             </h3>
           </div>
           <div className="flex items-center gap-3">
@@ -194,7 +196,7 @@ export function FiltersPanel({
                 className="text-slate-500 hover:text-red-600 hover:bg-red-50 h-8 rounded-lg text-xs font-bold transition-colors"
               >
                 <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-                Limpar Tudo
+                {t("filter_clear")}
               </Button>
             )}
             <Button
@@ -215,13 +217,13 @@ export function FiltersPanel({
                 htmlFor="search"
                 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5"
               >
-                <Search className="h-3.5 w-3.5" /> Busca Geral
+                <Search className="h-3.5 w-3.5" /> {t("filter_search_label")}
               </Label>
               <Input
                 id="search"
                 value={filters.search}
                 onChange={(e) => updateFilter("search", e.target.value)}
-                placeholder="Ex: fatura, relatório, assunto..."
+                placeholder={t("filter_search_placeholder")}
                 className="bg-white/60 border-slate-200 h-10 rounded-xl focus-visible:ring-blue-500"
               />
             </div>
@@ -230,13 +232,13 @@ export function FiltersPanel({
                 htmlFor="sender"
                 className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5"
               >
-                <User className="h-3.5 w-3.5" /> Remetente
+                <User className="h-3.5 w-3.5" /> {t("filter_sender_label")}
               </Label>
               <Input
                 id="sender"
                 value={filters.sender}
                 onChange={(e) => updateFilter("sender", e.target.value)}
-                placeholder="email@exemplo.com ou Nome"
+                placeholder={t("filter_sender_placeholder")}
                 className="bg-white/60 border-slate-200 h-10 rounded-xl focus-visible:ring-blue-500"
               />
             </div>
@@ -247,13 +249,13 @@ export function FiltersPanel({
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="space-y-3">
               <Label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
-                <TagIcon className="h-3.5 w-3.5" /> Tags
+                <TagIcon className="h-3.5 w-3.5" /> {t("filter_tags_label")}
               </Label>
               <div className="flex gap-2">
                 <Input
                   value={tempTag}
                   onChange={(e) => setTempTag(e.target.value)}
-                  placeholder="Escreva e prima Enter..."
+                  placeholder={t("filter_tags_placeholder")}
                   onKeyPress={(e) => e.key === "Enter" && addTag(tempTag)}
                   className="bg-white/60 border-slate-200 h-10 rounded-xl focus-visible:ring-blue-500"
                 />
@@ -282,7 +284,7 @@ export function FiltersPanel({
               {availableTags.length > 0 && (
                 <div className="mt-4 p-3 bg-slate-50/50 rounded-xl border border-slate-100">
                   <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">
-                    Sugestões rápidas
+                    {t("filter_tags_suggestions")}
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {availableTags
@@ -304,7 +306,7 @@ export function FiltersPanel({
 
             <div className="space-y-3">
               <Label className="text-xs font-bold text-slate-500 uppercase">
-                Prioridade
+                {t("filter_priority_label")}
               </Label>
               <div className="flex flex-wrap gap-3 mt-1">
                 {priorities.map((p) => {
@@ -333,7 +335,7 @@ export function FiltersPanel({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
               <Label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
-                <Paperclip className="h-3.5 w-3.5" /> Anexos
+                <Paperclip className="h-3.5 w-3.5" /> {t("filter_attachments_label")}
               </Label>
               <Select
                 value={
@@ -355,13 +357,13 @@ export function FiltersPanel({
                 </SelectTrigger>
                 <SelectContent className="rounded-xl">
                   <SelectItem value="all" className="rounded-lg">
-                    Todos os emails
+                    {t("filter_att_all")}
                   </SelectItem>
                   <SelectItem value="yes" className="rounded-lg">
-                    Apenas com anexos
+                    {t("filter_att_yes")}
                   </SelectItem>
                   <SelectItem value="no" className="rounded-lg">
-                    Sem anexos
+                    {t("filter_att_no")}
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -369,7 +371,7 @@ export function FiltersPanel({
 
             <div className="space-y-2">
               <Label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
-                <Mail className="h-3.5 w-3.5" /> Estado de Leitura
+                <Mail className="h-3.5 w-3.5" /> {t("filter_read_label")}
               </Label>
               <Select
                 value={
@@ -391,13 +393,13 @@ export function FiltersPanel({
                 </SelectTrigger>
                 <SelectContent className="rounded-xl">
                   <SelectItem value="all" className="rounded-lg">
-                    Lidos e Não Lidos
+                    {t("filter_read_all")}
                   </SelectItem>
                   <SelectItem value="read" className="rounded-lg">
-                    Apenas Lidos
+                    {t("filter_read_yes")}
                   </SelectItem>
                   <SelectItem value="unread" className="rounded-lg">
-                    Apenas Não Lidos
+                    {t("filter_read_no")}
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -405,7 +407,7 @@ export function FiltersPanel({
 
             <div className="space-y-2">
               <Label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1.5">
-                <CalendarDays className="h-3.5 w-3.5" /> Período
+                <CalendarDays className="h-3.5 w-3.5" /> {t("filter_date_label")}
               </Label>
               <div className="flex items-center gap-2">
                 <Input
@@ -419,7 +421,7 @@ export function FiltersPanel({
                   }
                   className="bg-white/60 border-slate-200 h-10 rounded-xl focus-visible:ring-blue-500 text-xs"
                 />
-                <span className="text-slate-400 font-medium">a</span>
+                <span className="text-slate-400 font-medium">{t("filter_date_to")}</span>
                 <Input
                   type="date"
                   value={filters.dateRange.to}

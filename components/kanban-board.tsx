@@ -14,6 +14,7 @@ import { EmailThreadCard } from "./email-thread-card";
 import { FiltersPanel, type EmailFilters } from "./filters-panel";
 import { DashboardLayout } from "./dashboard-layout";
 import { useAuth } from "./auth-provider";
+import { useLanguage } from "./language-provider";
 import {
   GraphService,
   type Email,
@@ -31,25 +32,24 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Database, AlertOctagon, Trash2, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-const DEFAULT_COLUMNS = [
-  {
-    id: "inbox",
-    title: "Caixa de Entrada",
-    color: "bg-blue-100 text-blue-800",
-    icon: "📥",
-  },
-];
-
 export function KanbanBoard() {
   const { accessToken, account, isLoading: authLoading } = useAuth();
+  const { t } = useLanguage();
   const { toast } = useToast();
+
+  const DEFAULT_COLUMNS = [
+    {
+      id: "inbox",
+      title: t("col_inbox"),
+      color: "bg-blue-100 text-blue-800",
+      icon: "📥",
+    },
+  ];
 
   const [emails, setEmails] = useState<Email[]>([]);
   const [threads, setThreads] = useState<EmailThread[]>([]);
   const [filteredThreads, setFilteredThreads] = useState<EmailThread[]>([]);
-  const [emailsMetadata, setEmailsMetadata] = useState<
-    Record<string, EmailMetadata>
-  >({});
+  const [emailsMetadata, setEmailsMetadata] = useState<Record<string, EmailMetadata>>({});
   const [customColumns, setCustomColumns] = useState<CustomColumn[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeThread, setActiveThread] = useState<EmailThread | null>(null);
@@ -80,8 +80,8 @@ export function KanbanBoard() {
   );
 
   useEffect(() => {
-    if (!isSupabaseAvailable()) setSupabaseError("Supabase não configurado.");
-  }, []);
+    if (!isSupabaseAvailable()) setSupabaseError(t("supabase_error"));
+  }, [t]);
 
   useEffect(() => {
     if (account?.homeAccountId && isSupabaseAvailable()) {
@@ -222,7 +222,6 @@ export function KanbanBoard() {
             .update({ ...updates, updated_at: new Date().toISOString() })
             .eq("email_id", emailId);
         } else {
-          // 👇 AQUI: Removi a linha 'priority: "media",' para que os emails não tenham prioridade por defeito
           await supabase!.from("email_metadata").insert({
             email_id: emailId,
             user_id: account.homeAccountId,
@@ -349,7 +348,6 @@ export function KanbanBoard() {
       filtered = filtered.filter((t) =>
         t.emails.some((e) => {
           const emailPriority = emailsMetadata[e.id]?.priority;
-          // Agora só passa no filtro se o email tiver realmente a prioridade que estamos a procurar
           if (!emailPriority) return false; 
           return filters.priority.includes(emailPriority);
         }),
@@ -413,7 +411,7 @@ export function KanbanBoard() {
   if (authLoading)
     return (
       <div className="flex items-center justify-center h-screen bg-white">
-        Loading...
+        {t("loading")}
       </div>
     );
 
@@ -489,21 +487,21 @@ export function KanbanBoard() {
             </div>
             <div>
               <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
-                {column?.title || "Coluna Desconhecida"}
+                {column?.title || t("col_unknown")}
               </h2>
             </div>
             <Badge
               variant="secondary"
               className="ml-auto text-sm px-3 py-1 bg-white border border-slate-200 shadow-sm"
             >
-              {colThreads.length} emails
+              {colThreads.length} {t("emails_count")}
             </Badge>
           </div>
 
           <div className="space-y-4">
             {colThreads.length === 0 ? (
               <div className="text-center py-16 text-slate-400 bg-white/50 rounded-3xl border border-dashed border-slate-200 shadow-sm">
-                Nenhum e-mail nesta lista. Tudo limpo!
+                {t("empty_col")}
               </div>
             ) : (
               colThreads.map((thread) => (
@@ -543,21 +541,21 @@ export function KanbanBoard() {
             </div>
             <div>
               <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
-                Adiados (Snooze)
+                {t("title_snoozed")}
               </h2>
             </div>
             <Badge
               variant="secondary"
               className="ml-auto text-sm px-3 py-1 bg-white border border-slate-200 shadow-sm text-indigo-600"
             >
-              {snoozedThreads.length} emails
+              {snoozedThreads.length} {t("emails_count")}
             </Badge>
           </div>
 
           <div className="space-y-4">
             {snoozedThreads.length === 0 ? (
               <div className="text-center py-16 text-slate-400 bg-white/50 rounded-3xl border border-dashed border-slate-200 shadow-sm">
-                Nenhum e-mail adiado.
+                {t("empty_snoozed")}
               </div>
             ) : (
               snoozedThreads.map((thread) => (
@@ -594,21 +592,21 @@ export function KanbanBoard() {
             </div>
             <div>
               <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
-                Arquivo
+                {t("title_archived")}
               </h2>
             </div>
             <Badge
               variant="secondary"
               className="ml-auto text-sm px-3 py-1 bg-white border border-slate-200 shadow-sm"
             >
-              {archivedThreads.length} emails
+              {archivedThreads.length} {t("emails_count")}
             </Badge>
           </div>
 
           <div className="space-y-4">
             {archivedThreads.length === 0 ? (
               <div className="text-center py-16 text-slate-400 bg-white/50 rounded-3xl border border-dashed border-slate-200 shadow-sm">
-                Nenhum e-mail no arquivo do Outlook.
+                {t("empty_archived")}
               </div>
             ) : (
               archivedThreads.map((thread) => (
@@ -645,21 +643,21 @@ export function KanbanBoard() {
             </div>
             <div>
               <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
-                Enviados
+                {t("title_sent")}
               </h2>
             </div>
             <Badge
               variant="secondary"
               className="ml-auto text-sm px-3 py-1 bg-white border border-slate-200 shadow-sm"
             >
-              {sentThreads.length} conversas
+              {sentThreads.length} {t("conversations_count")}
             </Badge>
           </div>
 
           <div className="space-y-4">
             {sentThreads.length === 0 ? (
               <div className="text-center py-16 text-slate-400 bg-white/50 rounded-3xl border border-dashed border-slate-200 shadow-sm">
-                Ainda não enviou nenhuma mensagem.
+                {t("empty_sent")}
               </div>
             ) : (
               sentThreads.map((thread) => (
@@ -695,21 +693,21 @@ export function KanbanBoard() {
             </div>
             <div>
               <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
-                Eliminados
+                {t("title_deleted")}
               </h2>
             </div>
             <Badge
               variant="secondary"
               className="ml-auto text-sm px-3 py-1 bg-white border border-slate-200 shadow-sm text-red-600"
             >
-              {deletedThreads.length} emails
+              {deletedThreads.length} {t("emails_count")}
             </Badge>
           </div>
 
           <div className="space-y-4">
             {deletedThreads.length === 0 ? (
               <div className="text-center py-16 text-slate-400 bg-white/50 rounded-3xl border border-dashed border-slate-200 shadow-sm">
-                O lixo está limpo.
+                {t("empty_deleted")}
               </div>
             ) : (
               deletedThreads.map((thread) => (
@@ -746,21 +744,21 @@ export function KanbanBoard() {
             </div>
             <div>
               <h2 className="text-2xl font-bold text-slate-800 tracking-tight">
-                Lixo Eletrónico
+                {t("title_spam")}
               </h2>
             </div>
             <Badge
               variant="secondary"
               className="ml-auto text-sm px-3 py-1 bg-white border border-slate-200 shadow-sm text-amber-600"
             >
-              {spamThreads.length} emails
+              {spamThreads.length} {t("emails_count")}
             </Badge>
           </div>
 
           <div className="space-y-4">
             {spamThreads.length === 0 ? (
               <div className="text-center py-16 text-slate-400 bg-white/50 rounded-3xl border border-dashed border-slate-200 shadow-sm">
-                Não tem mensagens de spam.
+                {t("empty_spam")}
               </div>
             ) : (
               spamThreads.map((thread) => (
@@ -788,7 +786,7 @@ export function KanbanBoard() {
       <div className="flex flex-col items-center justify-center h-[70vh] text-slate-400 space-y-4">
         <Clock className="h-12 w-12 text-slate-300" />
         <p className="font-medium text-lg">
-          Vista <b>{activeView}</b> em construção...
+          {t("view_construction_1")} <b>{activeView}</b> {t("view_construction_2")}
         </p>
       </div>
     );

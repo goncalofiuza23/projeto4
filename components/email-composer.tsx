@@ -46,6 +46,7 @@ import {
   Clock,
 } from "lucide-react";
 import { useAuth } from "./auth-provider";
+import { useLanguage } from "./language-provider";
 import {
   GraphService,
   type EmailDraft,
@@ -79,6 +80,7 @@ function AutocompleteEmailInput({
   required?: boolean, 
   accessToken: string | null 
 }) {
+  const { t } = useLanguage();
   const [suggestions, setSuggestions] = useState<ContactSuggestion[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -256,7 +258,7 @@ function AutocompleteEmailInput({
           {isLoading && suggestions.length === 0 ? (
             <div className="p-3 flex items-center justify-center gap-2 text-xs text-slate-400">
               <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
-              A carregar contactos...
+              {t("loading_contacts")}
             </div>
           ) : suggestions.length > 0 ? (
             suggestions.map((s, i) => (
@@ -273,7 +275,7 @@ function AutocompleteEmailInput({
             ))
           ) : (
             <div className="p-3 text-center text-xs text-slate-400 font-medium">
-              Nenhum contacto encontrado.
+              {t("no_contacts")}
             </div>
           )}
         </div>
@@ -283,6 +285,7 @@ function AutocompleteEmailInput({
 }
 
 function UndoCountdown() {
+  const { t } = useLanguage();
   const [timeLeft, setTimeLeft] = useState(10);
 
   useEffect(() => {
@@ -293,7 +296,7 @@ function UndoCountdown() {
 
   return (
     <span>
-      Tem <strong className="font-bold">{timeLeft}</strong> {timeLeft === 1 ? "segundo" : "segundos"} para anular o envio.
+      {t("undo_seconds_1")} <strong className="font-bold">{timeLeft}</strong> {timeLeft === 1 ? t("undo_seconds_2") : t("undo_seconds_3")} {t("undo_seconds_4")}
     </span>
   );
 }
@@ -322,6 +325,7 @@ export function EmailComposer({
   onSendStart,
 }: EmailComposerProps) {
   const { accessToken, account } = useAuth();
+  const { t, language } = useLanguage();
   const { toast } = useToast();
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -371,22 +375,20 @@ export function EmailComposer({
   const [newSigName, setNewSigName] = useState("");
   const [newSigContent, setNewSigContent] = useState("");
 
-  // 👇 NOVOS ESTADOS PARA AS AÇÕES E COLUNAS 👇
   const [customColumns, setCustomColumns] = useState<any[]>([]);
-  const [sendAction, setSendAction] = useState<{type: string, payload?: string, label: string}>({ type: 'send', label: 'Enviar Mensagem' });
+  const [sendAction, setSendAction] = useState<{type: string, payload?: string, label: string}>({ type: 'send', label: t("send_msg") });
 
   useEffect(() => {
-    if (mode === "new") setSendAction({ type: 'send', label: 'Enviar Mensagem' });
-    else if (mode === "forward") setSendAction({ type: 'send', label: 'Reencaminhar' });
-    else setSendAction({ type: 'send', label: 'Responder' });
-  }, [mode]);
+    if (mode === "new") setSendAction({ type: 'send', label: t("send_msg") });
+    else if (mode === "forward") setSendAction({ type: 'send', label: t("forward") });
+    else setSendAction({ type: 'send', label: t("reply") });
+  }, [mode, t]);
 
   useEffect(() => {
     if (!account?.homeAccountId || !isSupabaseAvailable()) return;
 
     const loadData = async () => {
       await safeSupabaseOperation(async () => {
-        // Carrega Assinaturas
         const { data: prefData } = await supabase!
           .from("user_preferences")
           .select("signatures")
@@ -397,7 +399,6 @@ export function EmailComposer({
           setSignatures(prefData.signatures);
         }
 
-        // Carrega Colunas (Para usar no Split Button)
         const { data: colsData } = await supabase!
           .from("custom_columns")
           .select("*")
@@ -442,8 +443,8 @@ export function EmailComposer({
     }
 
     toast({
-      title: "Assinatura Guardada",
-      description: `A assinatura "${newSignature.name}" está pronta a usar.`,
+      title: t("sig_saved"),
+      description: t("sig_saved_desc").replace("{name}", newSignature.name),
     });
   };
 
@@ -462,8 +463,8 @@ export function EmailComposer({
     }
     
     toast({
-      title: "Assinatura Removida",
-      description: "A assinatura foi eliminada com sucesso.",
+      title: t("sig_deleted"),
+      description: t("sig_deleted_desc"),
     });
   };
 
@@ -545,19 +546,21 @@ export function EmailComposer({
     }
 
     const fromName = originalEmail.from?.emailAddress?.name || originalEmail.from?.emailAddress?.address || "";
-    const dateStr = originalEmail.receivedDateTime ? new Date(originalEmail.receivedDateTime).toLocaleString("pt-PT") : "";
+    const dateStr = originalEmail.receivedDateTime 
+      ? new Date(originalEmail.receivedDateTime).toLocaleString(language === "en" ? "en-US" : "pt-PT") 
+      : "";
     const toNames = originalEmail.toRecipients?.map(r => r.emailAddress.name || r.emailAddress.address).join("; ") || "";
     
     const ccNames = originalEmail.ccRecipients?.map(r => r.emailAddress.name || r.emailAddress.address).join("; ") || "";
-    const ccLine = ccNames ? `<b>Cc:</b> ${ccNames}<br>` : "";
+    const ccLine = ccNames ? `<b>${t("history_cc")}</b> ${ccNames}<br>` : "";
 
     const historyHeader = `<br><br><br>
 <hr tabindex="-1" style="display:inline-block; width:100%; border:none; border-top:1px solid #E1E1E1;">
 <div style="font-family: Calibri, Arial, Helvetica, sans-serif; font-size: 11pt; color: #000000; padding-top: 8px;">
-<b>De:</b> ${fromName}<br>
-<b>Enviado:</b> ${dateStr}<br>
-<b>Para:</b> ${toNames}<br>
-${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
+<b>${t("history_from")}</b> ${fromName}<br>
+<b>${t("history_sent")}</b> ${dateStr}<br>
+<b>${t("history_to")}</b> ${toNames}<br>
+${ccLine}<b>${t("history_subject")}</b> ${originalEmail.subject || ""}<br>
 </div>
 <br>`;
 
@@ -622,7 +625,7 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
         }
       }, 100);
     }
-  }, [isOpen, originalEmail, mode]);
+  }, [isOpen, originalEmail, mode, t, language]);
 
   const parseEmailAddresses = (input: string) => {
     return input
@@ -750,7 +753,6 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
             break;
         }
 
-        // 👇 AQUI APLICAMOS A AÇÃO DE ARQUIVAR / MOVER (SÓ SE FOR RESPOSTA) 👇
         if (mode !== "new" && originalEmail && sendAction.type !== 'send' && account?.homeAccountId && isSupabaseAvailable()) {
           try {
             if (sendAction.type === 'archive') {
@@ -774,8 +776,8 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
         }
 
         toast({
-          title: "Email enviado com sucesso!",
-          description: "A sua mensagem foi entregue e organizada.",
+          title: t("send_success"),
+          description: t("send_success_desc"),
           duration: 4000,
         });
 
@@ -785,29 +787,29 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
       } catch (error) {
         console.error("Erro ao enviar email:", error);
         toast({
-          title: "Erro ao enviar email",
-          description: error instanceof Error ? error.message : "Ocorreu um erro inesperado.",
+          title: t("send_error"),
+          description: error instanceof Error ? error.message : t("unexpected_error"),
           variant: "destructive",
         });
       }
     }, 10000);
 
     toast({
-      title: "A enviar mensagem...",
+      title: t("sending_msg"),
       description: <UndoCountdown />,
       duration: 10000,
       action: (
         <ToastAction 
-          altText="Anular envio" 
+          altText={t("undo_send")} 
           onClick={() => {
             clearTimeout(timeoutId);
             toast({
-              title: "Envio Anulado",
-              description: "O e-mail foi cancelado e não foi enviado.",
+              title: t("send_undone"),
+              description: t("send_undone_desc"),
             });
           }}
         >
-          Anular
+          {t("undo_btn")}
         </ToastAction>
       ),
     });
@@ -816,13 +818,13 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
   const getTitle = () => {
     switch (mode) {
       case "reply":
-        return "Responder";
+        return t("reply");
       case "replyAll":
-        return "Responder a Todos";
+        return t("reply_all");
       case "forward":
-        return "Reencaminhar Email";
+        return t("forward");
       default:
-        return "Nova Mensagem";
+        return t("new_msg");
     }
   };
 
@@ -856,7 +858,7 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                   htmlFor="to"
                   className="w-12 pt-2.5 text-xs font-bold text-slate-400 uppercase text-right"
                 >
-                  Para
+                  {t("to_label")}
                 </label>
                 <div className="flex-1 relative">
                   <AutocompleteEmailInput
@@ -874,7 +876,7 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                   className="h-10 px-3 text-slate-500 hover:text-slate-900 rounded-xl text-xs font-medium"
                   onClick={() => setShowAdvanced(!showAdvanced)}
                 >
-                  CC / CCO{" "}
+                  {t("cc_bcc_btn")}{" "}
                   {showAdvanced ? (
                     <ChevronUp className="ml-1 h-3 w-3" />
                   ) : (
@@ -890,7 +892,7 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                       htmlFor="cc"
                       className="w-12 pt-2.5 text-xs font-bold text-slate-400 uppercase text-right"
                     >
-                      Cc
+                      {t("cc_label")}
                     </label>
                     <div className="flex-1 relative">
                       <AutocompleteEmailInput
@@ -907,7 +909,7 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                       htmlFor="bcc"
                       className="w-12 pt-2.5 text-xs font-bold text-slate-400 uppercase text-right"
                     >
-                      Cco
+                      {t("bcc_label")}
                     </label>
                     <div className="flex-1 relative">
                       <AutocompleteEmailInput
@@ -921,7 +923,7 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                   </div>
                   <div className="flex items-start gap-4">
                     <label className="w-12 pt-2.5 text-xs font-bold text-slate-400 uppercase text-right">
-                      Grau
+                      {t("importance_label")}
                     </label>
                     <div className="flex-1">
                       <Select
@@ -935,11 +937,11 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                         </SelectTrigger>
                         <SelectContent className="rounded-xl">
                           <SelectItem value="low">
-                            🟢 Baixa Importância
+                            🟢 {t("importance_low")}
                           </SelectItem>
-                          <SelectItem value="normal">🟡 Normal</SelectItem>
+                          <SelectItem value="normal">🟡 {t("importance_normal")}</SelectItem>
                           <SelectItem value="high">
-                            🔴 Alta Importância
+                            🔴 {t("importance_high")}
                           </SelectItem>
                         </SelectContent>
                       </Select>
@@ -955,7 +957,7 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                   htmlFor="subject"
                   className="w-12 pt-2.5 text-xs font-bold text-slate-400 uppercase text-right"
                 >
-                  Tema
+                  {t("subject_label")}
                 </label>
                 <Input
                   id="subject"
@@ -963,7 +965,7 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                   onChange={(e) =>
                     setEmailData({ ...emailData, subject: e.target.value })
                   }
-                  placeholder="Assunto da mensagem"
+                  placeholder={t("subject_placeholder")}
                   className="flex-1 h-10 rounded-xl bg-slate-50 border-slate-200 shadow-none font-medium focus-visible:ring-1 focus-visible:ring-blue-400 focus-visible:bg-white"
                   required
                 />
@@ -976,7 +978,7 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                     
                     <Select onValueChange={(value) => executeCommand("fontName", value)}>
                       <SelectTrigger className="h-8 w-[130px] text-xs border-transparent bg-transparent shadow-none hover:bg-slate-200 focus:ring-0 px-2 transition-colors">
-                        <SelectValue placeholder="Fonte" />
+                        <SelectValue placeholder={t("font_placeholder")} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Arial">Arial</SelectItem>
@@ -989,7 +991,7 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
 
                     <Select onValueChange={(value) => executeCommand("fontSize", value)}>
                       <SelectTrigger className="h-8 w-[80px] text-xs border-transparent bg-transparent shadow-none hover:bg-slate-200 focus:ring-0 px-2 transition-colors">
-                        <SelectValue placeholder="Tam." />
+                        <SelectValue placeholder={t("size_placeholder")} />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="1">10 pt</SelectItem>
@@ -1034,7 +1036,7 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                     
                     <div className="w-px h-5 bg-slate-300 mx-1" />
 
-                    <div className="relative flex items-center justify-center w-8 h-8 rounded-md hover:bg-slate-200 overflow-hidden cursor-pointer" title="Cor do Texto">
+                    <div className="relative flex items-center justify-center w-8 h-8 rounded-md hover:bg-slate-200 overflow-hidden cursor-pointer" title={t("text_color")}>
                       <span className="font-serif font-bold text-slate-700 pointer-events-none z-10 text-[15px] border-b-[3px] border-red-500 leading-none pb-0.5">A</span>
                       <input 
                         type="color" 
@@ -1043,7 +1045,7 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                       />
                     </div>
 
-                    <div className="relative flex items-center justify-center w-8 h-8 rounded-md hover:bg-slate-200 overflow-hidden cursor-pointer" title="Cor de Destaque">
+                    <div className="relative flex items-center justify-center w-8 h-8 rounded-md hover:bg-slate-200 overflow-hidden cursor-pointer" title={t("highlight_color")}>
                       <Highlighter className="h-[18px] w-[18px] text-slate-700 pointer-events-none z-10" />
                       <input 
                         type="color" 
@@ -1082,7 +1084,7 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                     onKeyUp={checkFormattingState}
                     onMouseUp={checkFormattingState}
                     style={{ minHeight: "200px" }}
-                    data-placeholder="Escreva a sua mensagem aqui..."
+                    data-placeholder={t("body_placeholder")}
                   />
                 </div>
               </div>
@@ -1135,7 +1137,7 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                 className="text-slate-500 hover:text-slate-900 rounded-xl font-medium"
               >
                 <Paperclip className="h-4 w-4 mr-2" />
-                Anexar
+                {t("attach_btn")}
               </Button>
 
               <DropdownMenu>
@@ -1146,14 +1148,14 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                     className="text-slate-500 hover:text-slate-900 rounded-xl font-medium"
                   >
                     <PenTool className="h-4 w-4 mr-2" />
-                    Assinatura
+                    {t("sig_btn")}
                     <ChevronDown className="h-3 w-3 ml-1" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-56 rounded-xl">
                   {signatures.length === 0 ? (
                     <div className="px-2 py-3 text-xs text-slate-400 text-center">
-                      Nenhuma assinatura
+                      {t("no_sig")}
                     </div>
                   ) : (
                     signatures.map((sig) => (
@@ -1171,7 +1173,7 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                     onClick={() => setIsSignManagerOpen(true)}
                     className="cursor-pointer font-medium text-blue-600 focus:text-blue-700"
                   >
-                    + Gerir Assinaturas
+                    {t("manage_sigs_btn")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -1184,10 +1186,9 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                 disabled={isLoading}
                 className="rounded-xl font-semibold text-slate-500 hover:bg-slate-200/50"
               >
-                Cancelar
+                {t("cancel_btn")}
               </Button>
               
-              {/* 👇 BOTÃO DIVIDIDO (SPLIT BUTTON) IMPLEMENTADO AQUI 👇 */}
               <div className="flex items-center">
                 {mode === "new" ? (
                   <Button
@@ -1228,38 +1229,39 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-64 rounded-xl border-slate-100 shadow-xl">
                         <DropdownMenuItem 
-                          onClick={() => setSendAction({ type: 'send', label: mode === 'forward' ? 'Reencaminhar' : 'Responder' })}
+                          onClick={() => setSendAction({ type: 'send', label: mode === 'forward' ? t("forward") : t("reply") })}
                           className="cursor-pointer py-2 font-medium"
                         >
-                          <Send className="mr-2 h-4 w-4 text-slate-500" /> Apenas {mode === 'forward' ? 'Reencaminhar' : 'Responder'}
+                          <Send className="mr-2 h-4 w-4 text-slate-500" /> 
+                          {mode === 'forward' ? t("only_forward") : t("only_reply")}
                         </DropdownMenuItem>
                         
                         <DropdownMenuSeparator className="bg-slate-100" />
                         
                         <DropdownMenuItem 
-                          onClick={() => setSendAction({ type: 'archive', label: 'Enviar e Arquivar' })}
+                          onClick={() => setSendAction({ type: 'archive', label: t("send_archive") })}
                           className="cursor-pointer py-2 font-medium"
                         >
-                          <Archive className="mr-2 h-4 w-4 text-amber-500" /> Enviar e Arquivar
+                          <Archive className="mr-2 h-4 w-4 text-amber-500" /> {t("send_archive")}
                         </DropdownMenuItem>
                         
                         <DropdownMenuItem 
-                          onClick={() => setSendAction({ type: 'snooze', label: 'Enviar e Adiar' })}
+                          onClick={() => setSendAction({ type: 'snooze', label: t("send_snooze") })}
                           className="cursor-pointer py-2 font-medium"
                         >
-                          <Clock className="mr-2 h-4 w-4 text-indigo-500" /> Enviar e Adiar (Amanhã)
+                          <Clock className="mr-2 h-4 w-4 text-indigo-500" /> {t("send_snooze")}
                         </DropdownMenuItem>
 
                         {customColumns.length > 0 && (
                           <>
                             <DropdownMenuSeparator className="bg-slate-100" />
                             <div className="px-2 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                              Enviar e Mover para...
+                              {t("send_move_to")}
                             </div>
                             {customColumns.map(col => (
                               <DropdownMenuItem 
                                 key={col.id}
-                                onClick={() => setSendAction({ type: 'column', payload: col.id, label: `Enviar para ${col.name}` })}
+                                onClick={() => setSendAction({ type: 'column', payload: col.id, label: `${t("send_to_col")} ${col.name}` })}
                                 className="cursor-pointer py-2 font-medium"
                               >
                                 <span className="mr-2 text-base">{col.icon || "📁"}</span> {col.name}
@@ -1283,14 +1285,14 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
           onPointerDown={(e) => e.stopPropagation()}
         >
           <DialogHeader>
-            <DialogTitle>Gerir Assinaturas</DialogTitle>
+            <DialogTitle>{t("manage_sigs_title")}</DialogTitle>
           </DialogHeader>
           
           <div className="space-y-6 py-2">
             {signatures.length > 0 && (
               <div className="space-y-2 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
                 <label className="text-xs font-bold text-slate-500 uppercase">
-                  Assinaturas Guardadas
+                  {t("saved_sigs")}
                 </label>
                 {signatures.map((sig) => (
                   <div
@@ -1315,10 +1317,10 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
 
             <div className="space-y-3 pt-4 border-t border-slate-100">
               <label className="text-xs font-bold text-slate-500 uppercase">
-                Criar Nova Assinatura
+                {t("create_sig")}
               </label>
               <Input
-                placeholder="Nome (ex: IPVC, Pessoal, Inglês...)"
+                placeholder={t("sig_name_placeholder")}
                 value={newSigName}
                 onChange={(e) => setNewSigName(e.target.value)}
                 className="h-10 rounded-xl bg-slate-50 border-slate-200 shadow-none"
@@ -1334,7 +1336,7 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                     }
                   }}>
                     <SelectTrigger className="h-7 w-[80px] text-xs border-transparent bg-transparent shadow-none hover:bg-slate-200 focus:ring-0 px-2 transition-colors">
-                      <SelectValue placeholder="Tam." />
+                      <SelectValue placeholder={t("size_placeholder")} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="1">10 pt</SelectItem>
@@ -1356,7 +1358,7 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                     onClick={() => sigFileInputRef.current?.click()}
                   >
                     <ImageIcon className="h-3.5 w-3.5 mr-1" />
-                    Adicionar Imagem
+                    {t("add_image")}
                   </Button>
                   <input
                     type="file"
@@ -1386,7 +1388,7 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                   contentEditable
                   onInput={(e) => setNewSigContent(e.currentTarget.innerHTML)}
                   className="min-h-[120px] p-3 text-sm focus-visible:outline-none custom-scrollbar overflow-y-auto"
-                  data-placeholder="Escreva a sua assinatura aqui..."
+                  data-placeholder={t("sig_body_placeholder")}
                 />
               </div>
 
@@ -1395,7 +1397,7 @@ ${ccLine}<b>Assunto:</b> ${originalEmail.subject || ""}<br>
                 disabled={!newSigName.trim() || !newSigContent.trim()}
                 className="w-full h-10 rounded-xl bg-blue-600 text-white hover:bg-blue-700 font-bold"
               >
-                Guardar Assinatura
+                {t("save_sig_btn")}
               </Button>
             </div>
           </div>

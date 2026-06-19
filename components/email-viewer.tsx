@@ -30,6 +30,7 @@ import {
   AlertTriangle
 } from "lucide-react";
 import { useAuth } from "./auth-provider";
+import { useLanguage } from "./language-provider";
 import { GraphService, type Email } from "@/lib/microsoft-graph";
 import type { EmailMetadata, Subtask } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
@@ -72,6 +73,7 @@ export function EmailViewer({
   hideArchiveButton,
 }: EmailViewerProps) {
   const { accessToken } = useAuth();
+  const { t, language } = useLanguage();
   const { toast } = useToast();
   const [fullEmail, setFullEmail] = useState<Email | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -96,7 +98,8 @@ export function EmailViewer({
   }, [metadata?.subtasks]);
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("pt-PT", {
+    const locale = language === "en" ? "en-US" : "pt-PT";
+    return new Date(dateString).toLocaleDateString(locale, {
       weekday: "long",
       year: "numeric",
       month: "long",
@@ -116,8 +119,8 @@ export function EmailViewer({
       setFullEmail(emailData);
     } catch (error) {
       toast({
-        title: "Erro",
-        description: "Não foi possível carregar o conteúdo completo do email.",
+        title: t("error_title"),
+        description: t("error_load_email"),
         variant: "destructive",
       });
     } finally {
@@ -133,8 +136,8 @@ export function EmailViewer({
       await graphService.markAsRead(email.id);
 
       toast({
-        title: "Email lido",
-        description: "Marcado como lido com sucesso.",
+        title: t("email_read"),
+        description: t("email_read_desc"),
       });
     } catch (error) {
       console.error("Erro ao marcar email como lido:", error);
@@ -150,8 +153,8 @@ export function EmailViewer({
       await graphService.moveToFolder(email.id, "archive");
 
       toast({
-        title: "Email arquivado",
-        description: "A mensagem foi movida para o arquivo.",
+        title: t("email_archived"),
+        description: t("email_archived_desc"),
       });
 
       if (onEmailSent) onEmailSent();
@@ -159,8 +162,8 @@ export function EmailViewer({
     } catch (error) {
       console.error("Erro ao arquivar email:", error);
       toast({
-        title: "Erro",
-        description: "Não foi possível arquivar o email.",
+        title: t("error_title"),
+        description: t("error_archive"),
         variant: "destructive",
       });
     }
@@ -178,8 +181,8 @@ export function EmailViewer({
       onUpdateMetadata(email.id, { column_id: "deleted" });
 
       toast({
-        title: "Email eliminado",
-        description: "A mensagem foi movida para os Itens Eliminados.",
+        title: t("email_deleted"),
+        description: t("email_deleted_desc"),
       });
 
       if (onEmailSent) onEmailSent();
@@ -187,18 +190,16 @@ export function EmailViewer({
     } catch (error) {
       console.error("Erro ao eliminar email:", error);
       toast({
-        title: "Erro",
-        description: "Não foi possível eliminar o email.",
+        title: t("error_title"),
+        description: t("error_delete"),
         variant: "destructive",
       });
     }
   };
 
-  // 👇 NOVA LÓGICA DE ABERTURA DOS ANEXOS 👇
   const handleDownloadAttachment = (attachment: any) => {
     if (attachment.contentBytes) {
       try {
-        // Converte o base64 para ficheiro real (Blob)
         const byteCharacters = atob(attachment.contentBytes);
         const byteNumbers = new Array(byteCharacters.length);
         for (let i = 0; i < byteCharacters.length; i++) {
@@ -207,12 +208,10 @@ export function EmailViewer({
         const byteArray = new Uint8Array(byteNumbers);
         const blob = new Blob([byteArray], { type: attachment.contentType || "application/octet-stream" });
         
-        // Cria um endereço temporário no navegador para este ficheiro
         const blobUrl = URL.createObjectURL(blob);
 
         const fileName = (attachment.name || "").toLowerCase();
         
-        // Verifica se é um formato que o browser consegue abrir diretamente
         const canOpenInBrowser = 
           fileName.endsWith(".pdf") || 
           fileName.endsWith(".jpg") || 
@@ -222,10 +221,8 @@ export function EmailViewer({
           fileName.endsWith(".txt");
 
         if (canOpenInBrowser) {
-          // Abre num novo separador
           window.open(blobUrl, "_blank");
         } else {
-          // Força o download (para Word, Excel, etc.)
           const downloadLink = document.createElement("a");
           downloadLink.href = blobUrl;
           downloadLink.download = attachment.name;
@@ -234,20 +231,19 @@ export function EmailViewer({
           document.body.removeChild(downloadLink);
         }
         
-        // Limpa a memória após alguns segundos para não pesar no PC
         setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
         
       } catch (e) {
         toast({
-          title: "Erro ao processar anexo",
-          description: "Não foi possível ler este ficheiro.",
+          title: t("error_attachment"),
+          description: t("error_attachment_desc"),
           variant: "destructive",
         });
       }
     } else {
       toast({
-        title: "Erro de Download",
-        description: "O conteúdo deste anexo não está disponível.",
+        title: t("error_download"),
+        description: t("error_download_desc"),
         variant: "destructive",
       });
     }
@@ -355,7 +351,7 @@ export function EmailViewer({
 
     return (
       <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-500 italic">
-        {emailToRender.bodyPreview || "Conteúdo não disponível"}
+        {emailToRender.bodyPreview || t("content_unavailable")}
       </div>
     );
   };
@@ -439,7 +435,7 @@ export function EmailViewer({
               <DialogHeader className="px-8 py-6 border-b border-slate-100 bg-white space-y-4 shrink-0">
                 <div className="flex items-start justify-between gap-4">
                   <DialogTitle className="text-xl font-bold text-slate-900 leading-tight">
-                    {email.subject || "(Sem assunto)"}
+                    {email.subject || t("no_subject")}
                   </DialogTitle>
 
                   <Button
@@ -450,7 +446,7 @@ export function EmailViewer({
                   >
                     <ListTodo className="h-4 w-4" />
                     <span className="hidden sm:inline">
-                      Tarefas ({completedTasksCount}/{subtasks.length})
+                      {t("tasks_btn")} ({completedTasksCount}/{subtasks.length})
                     </span>
                   </Button>
                 </div>
@@ -482,7 +478,7 @@ export function EmailViewer({
                       <Users className="h-3.5 w-3.5 text-slate-400 mt-0.5 shrink-0" />
                       <div className="flex-1 flex flex-wrap gap-1">
                         <span className="text-slate-400 text-xs font-semibold mr-1 mt-0.5 uppercase tracking-wider">
-                          Para:
+                          {t("to_label_caps")}
                         </span>
                         {fullEmail.toRecipients.map((recipient, index) => (
                           <span
@@ -499,7 +495,7 @@ export function EmailViewer({
                   <div className="flex items-center gap-2 flex-wrap ml-10 mt-1">
                     {!email.isRead && (
                       <Badge variant="default" className="text-[10px] uppercase bg-blue-600">
-                        Nova Mensagem
+                        {t("new_msg_badge")}
                       </Badge>
                     )}
 
@@ -508,7 +504,9 @@ export function EmailViewer({
                         variant="outline"
                         className={`text-[10px] font-bold ${priorityColors[metadata.priority as keyof typeof priorityColors]}`}
                       >
-                        {priorityIcons[metadata.priority as keyof typeof priorityIcons]} {metadata.priority.toUpperCase()}
+                        {priorityIcons[metadata.priority as keyof typeof priorityIcons]} {
+                          t(`priority_${metadata.priority}_text` as any) || metadata.priority.toUpperCase()
+                        }
                       </Badge>
                     )}
 
@@ -534,7 +532,7 @@ export function EmailViewer({
                   <div className="px-8 py-4 border-b border-slate-100 bg-white">
                     <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-2">
                       <Paperclip className="h-3.5 w-3.5" />
-                      Anexos ({visibleAttachments.length})
+                      {t("attachments_title")} ({visibleAttachments.length})
                     </h4>
                     <div className="flex flex-wrap gap-3">
                       {visibleAttachments.map((attachment: any, index: number) => {
@@ -546,7 +544,7 @@ export function EmailViewer({
                             key={index}
                             onClick={() => handleDownloadAttachment(attachment)}
                             className="flex items-center gap-3 p-2.5 pr-4 bg-white border border-slate-200 rounded-xl hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer group"
-                            title={opensInBrowser ? "Abrir anexo" : "Descarregar anexo"}
+                            title={opensInBrowser ? t("open_attachment") : t("download_attachment")}
                           >
                             <div className="h-8 w-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
                               {opensInBrowser ? <Eye className="h-4 w-4" /> : <Download className="h-4 w-4" />}
@@ -571,7 +569,7 @@ export function EmailViewer({
                     <div className="flex flex-col items-center justify-center h-32 text-slate-400 space-y-3">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                       <span className="text-sm font-medium">
-                        A carregar conteúdo...
+                        {t("loading_content")}
                       </span>
                     </div>
                   ) : (
@@ -590,7 +588,7 @@ export function EmailViewer({
                     onClick={() => setComposerMode("reply")}
                   >
                     <Reply className="h-4 w-4 mr-2 text-slate-400" />
-                    Responder
+                    {t("reply_btn")}
                   </Button>
                   <Button
                     variant="outline"
@@ -598,7 +596,7 @@ export function EmailViewer({
                     onClick={() => setComposerMode("replyAll")}
                   >
                     <ReplyAll className="h-4 w-4 mr-2 text-slate-400" />
-                    Todos
+                    {t("reply_all_btn")}
                   </Button>
                   <Button
                     variant="outline"
@@ -606,7 +604,7 @@ export function EmailViewer({
                     onClick={() => setComposerMode("forward")}
                   >
                     <Forward className="h-4 w-4 mr-2 text-slate-400" />
-                    Encaminhar
+                    {t("forward_btn")}
                   </Button>
                 </div>
 
@@ -619,7 +617,7 @@ export function EmailViewer({
                       onClick={handleArchive}
                     >
                       <Archive className="h-4 w-4 mr-2" />
-                      Arquivar
+                      {t("archive_btn")}
                     </Button>
                   )}
 
@@ -630,7 +628,7 @@ export function EmailViewer({
                       onClick={() => setIsDeleteDialogOpen(true)}
                     >
                       <Trash2 className="h-4 w-4 mr-2" />
-                      Eliminar
+                      {t("delete_btn")}
                     </Button>
                   )}
 
@@ -639,7 +637,7 @@ export function EmailViewer({
                     onClick={onClose}
                     className="rounded-xl text-slate-500 hover:bg-slate-100 font-semibold"
                   >
-                    Fechar
+                    {t("close_btn")}
                   </Button>
                 </div>
               </div>
@@ -651,15 +649,15 @@ export function EmailViewer({
                 <div className="px-6 py-5 border-b border-slate-200 bg-white">
                   <h3 className="font-bold text-slate-800 flex items-center gap-2">
                     <ListTodo className="h-5 w-5 text-blue-600" />
-                    Lista de Tarefas
+                    {t("task_list")}
                   </h3>
 
                   {subtasks.length > 0 && (
                     <div className="mt-3">
                       <div className="flex items-center justify-between text-xs text-slate-500 mb-1.5 font-medium">
-                        <span>Progresso</span>
+                        <span>{t("progress")}</span>
                         <span>
-                          {completedTasksCount} de {subtasks.length}
+                          {completedTasksCount} {t("of_word")} {subtasks.length}
                         </span>
                       </div>
                       <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
@@ -676,9 +674,9 @@ export function EmailViewer({
                   <div className="space-y-2">
                     {subtasks.length === 0 && !isAddingTask && (
                       <div className="text-center p-6 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 text-sm">
-                        Nenhuma tarefa associada.
+                        {t("no_tasks")}
                         <br />
-                        Clique abaixo para adicionar.
+                        {t("click_to_add")}
                       </div>
                     )}
 
@@ -708,14 +706,14 @@ export function EmailViewer({
                                 className="h-6 text-xs"
                                 onClick={() => setEditingTaskId(null)}
                               >
-                                Cancelar
+                                {t("cancel_btn")}
                               </Button>
                               <Button
                                 size="sm"
                                 className="h-6 text-xs bg-blue-600"
                                 onClick={saveEditingTask}
                               >
-                                Guardar
+                                {t("save_btn")}
                               </Button>
                             </div>
                           </div>
@@ -768,7 +766,7 @@ export function EmailViewer({
                           if (e.key === "Enter") handleAddSubtask();
                           if (e.key === "Escape") setIsAddingTask(false);
                         }}
-                        placeholder="Descreva a tarefa..."
+                        placeholder={t("task_placeholder")}
                         className="text-sm h-8 border-none bg-slate-50 focus-visible:ring-0 px-2 mb-2"
                       />
                       <div className="flex justify-end gap-1">
@@ -778,14 +776,14 @@ export function EmailViewer({
                           className="h-6 text-xs text-slate-500"
                           onClick={() => setIsAddingTask(false)}
                         >
-                          Cancelar
+                          {t("cancel_btn")}
                         </Button>
                         <Button
                           size="sm"
                           className="h-6 text-xs bg-blue-600"
                           onClick={handleAddSubtask}
                         >
-                          Adicionar
+                          {t("add_btn")}
                         </Button>
                       </div>
                     </div>
@@ -796,7 +794,7 @@ export function EmailViewer({
                       onClick={() => setIsAddingTask(true)}
                     >
                       <Plus className="h-4 w-4 mr-2" />
-                      Nova Tarefa
+                      {t("new_task")}
                     </Button>
                   )}
                 </div>
@@ -810,10 +808,10 @@ export function EmailViewer({
         <DialogContent className="max-w-sm rounded-2xl" onPointerDown={(e) => e.stopPropagation()}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
-              <AlertTriangle className="h-5 w-5" /> Eliminar E-mail
+              <AlertTriangle className="h-5 w-5" /> {t("delete_email_title")}
             </DialogTitle>
             <DialogDescription className="text-slate-500 pt-2">
-              Tem a certeza de que pretende eliminar esta mensagem? Esta ação moverá o e-mail para a pasta de Itens Eliminados.
+              {t("delete_email_desc")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex gap-2 sm:justify-end mt-4">
@@ -822,14 +820,14 @@ export function EmailViewer({
               onClick={() => setIsDeleteDialogOpen(false)}
               className="rounded-xl h-10 px-6"
             >
-              Cancelar
+              {t("cancel_btn")}
             </Button>
             <Button
               variant="destructive"
               onClick={handleDelete}
               className="rounded-xl h-10 px-6"
             >
-              Eliminar
+              {t("delete_btn")}
             </Button>
           </DialogFooter>
         </DialogContent>

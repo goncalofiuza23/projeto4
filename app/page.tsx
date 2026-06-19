@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AuthProvider, useAuth } from "@/components/auth-provider";
+import { useLanguage, type Language } from "@/components/language-provider";
 import { KanbanBoard } from "@/components/kanban-board";
 import { Toaster } from "@/components/ui/toaster";
 import { Button } from "@/components/ui/button";
@@ -21,10 +22,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 function HomeContent() {
-  const { account, accessToken, login, isLoading, isAuthenticating } =
-    useAuth();
+  const { account, accessToken, login, isLoading, isAuthenticating } = useAuth();
+  const { t, language, setLanguage } = useLanguage();
 
   const [isLegalOpen, setIsLegalOpen] = useState(false);
   const [legalView, setLegalView] = useState<"terms" | "privacy">("privacy");
@@ -38,7 +46,7 @@ function HomeContent() {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-[#F8FAFC] text-slate-500">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
-        <p className="font-medium text-sm">A carregar...</p>
+        <p className="font-medium text-sm">{t("loading")}</p>
       </div>
     );
   }
@@ -49,41 +57,76 @@ function HomeContent() {
         <header className="w-full bg-white border-b border-slate-200 py-4 px-6 md:px-12 flex items-center justify-between">
           <div className="flex items-center gap-2 text-slate-800 font-semibold text-lg">
             <LayoutDashboard className="h-5 w-5 text-blue-600" />
-            Outlook Kanban
+            {t("header_title")}
+          </div>
+          
+          <div className="w-32">
+            <Select 
+              onValueChange={(val) => setLanguage(val as Language)} 
+              value={language}
+            >
+              <SelectTrigger className="w-full h-9 bg-slate-50 border-slate-200 rounded-xl text-xs font-bold hover:bg-slate-100 transition-colors shadow-sm">
+                <SelectValue /> 
+              </SelectTrigger>
+              <SelectContent className="rounded-xl border-slate-100 shadow-xl">
+                <SelectItem value="pt" className="text-xs py-2 font-medium cursor-pointer">
+                  <div className="flex items-center gap-2.5">
+                    <img 
+                      src="https://flagcdn.com/w20/pt.png" 
+                      srcSet="https://flagcdn.com/w40/pt.png 2x"
+                      width="16" 
+                      alt="Portugal" 
+                      className="rounded-[2px] shadow-sm"
+                    />
+                    PT Português
+                  </div>
+                </SelectItem>
+                <SelectItem value="en" className="text-xs py-2 font-medium cursor-pointer">
+                  <div className="flex items-center gap-2.5">
+                    <img 
+                      src="https://flagcdn.com/w20/us.png" 
+                      srcSet="https://flagcdn.com/w40/us.png 2x"
+                      width="16" 
+                      alt="USA" 
+                      className="rounded-[2px] shadow-sm"
+                    />
+                    EN English
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </header>
 
         <main className="flex-1 flex flex-col md:flex-row items-center justify-center max-w-7xl mx-auto w-full px-6 py-12 gap-12 lg:gap-20">
           <div className="flex-1 max-w-xl">
             <h1 className="text-4xl md:text-5xl font-bold text-slate-900 leading-tight tracking-tight mb-6">
-              Os seus e-mails,
+              {t("hero_title_1")}
               <br />
-              <span className="text-blue-600">organizados no quadro.</span>
+              <span className="text-blue-600">{t("hero_title_2")}</span>
             </h1>
 
             <p className="text-slate-600 text-lg leading-relaxed mb-10">
-              Uma interface visual ligada diretamente ao seu Outlook. Ideal para
-              estudantes e profissionais que precisam de gerir mensagens como
-              tarefas reais.
+              {t("hero_subtitle")}
             </p>
 
             <div className="space-y-5 mb-12">
               <div className="flex items-center gap-4 text-slate-700 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                 <Columns3 className="h-6 w-6 text-blue-500 shrink-0" />
                 <span className="font-medium">
-                  Colunas personalizadas para organização rápida.
+                  {t("feature_1")}
                 </span>
               </div>
               <div className="flex items-center gap-4 text-slate-700 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                 <Clock className="h-6 w-6 text-indigo-500 shrink-0" />
                 <span className="font-medium">
-                  Função Snooze para adiar conversas para mais tarde.
+                  {t("feature_2")}
                 </span>
               </div>
               <div className="flex items-center gap-4 text-slate-700 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                 <CheckCircle2 className="h-6 w-6 text-emerald-500 shrink-0" />
                 <span className="font-medium">
-                  Privacidade total: não guardamos os seus e-mails.
+                  {t("feature_3")}
                 </span>
               </div>
             </div>
@@ -97,7 +140,7 @@ function HomeContent() {
                 <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
                 <>
-                  Entrar com a Microsoft
+                  {t("login_ms")}
                   <ArrowRight className="h-5 w-5 ml-1" />
                 </>
               )}
@@ -163,7 +206,7 @@ function HomeContent() {
                   </div>
                   <div className="flex-1 border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center">
                     <span className="text-xs text-slate-400 font-medium">
-                      Arraste para aqui
+                      {t("drag_here")}
                     </span>
                   </div>
                 </div>
@@ -174,19 +217,19 @@ function HomeContent() {
 
         <footer className="w-full border-t border-slate-200 bg-white py-6">
           <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500">
-            <p>Projeto de Gestão de E-mails.</p>
+            <p>{t("footer_desc")}</p>
             <div className="flex items-center gap-6">
               <button
                 onClick={() => openLegal("terms")}
                 className="hover:text-slate-800 transition-colors"
               >
-                Termos e Condições
+                {t("terms")}
               </button>
               <button
                 onClick={() => openLegal("privacy")}
                 className="hover:text-slate-800 transition-colors"
               >
-                Privacidade
+                {t("privacy")}
               </button>
             </div>
           </div>
@@ -198,12 +241,11 @@ function HomeContent() {
               <DialogTitle className="flex items-center gap-2 text-xl font-bold text-slate-800">
                 {legalView === "terms" ? (
                   <>
-                    <FileText className="h-5 w-5 text-blue-600" /> Termos de Uso
+                    <FileText className="h-5 w-5 text-blue-600" /> {t("modal_terms_title")}
                   </>
                 ) : (
                   <>
-                    <Shield className="h-5 w-5 text-emerald-600" /> Como gerimos
-                    os seus dados
+                    <Shield className="h-5 w-5 text-emerald-600" /> {t("modal_privacy_title")}
                   </>
                 )}
               </DialogTitle>
@@ -213,76 +255,53 @@ function HomeContent() {
                 <>
                   <div>
                     <h3 className="font-semibold text-slate-900 text-base mb-1">
-                      1. Sobre o Projeto
+                      {t("terms_1_title")}
                     </h3>
-                    <p>
-                      O Gestor Kanban é uma ferramenta desenvolvida em contexto
-                      académico.
-                    </p>
+                    <p>{t("terms_1_desc")}</p>
                   </div>
                   <div>
                     <h3 className="font-semibold text-slate-900 text-base mb-1">
-                      2. Permissões da Microsoft
+                      {t("terms_2_title")}
                     </h3>
-                    <p>
-                      Para funcionar, a aplicação pede permissão para ler,
-                      modificar e enviar e-mails em seu nome através da API
-                      oficial da Microsoft Graph. O login é gerido pela
-                      Microsoft, nós nunca vemos a sua password.
-                    </p>
+                    <p>{t("terms_2_desc")}</p>
                   </div>
                   <div>
                     <h3 className="font-semibold text-slate-900 text-base mb-1">
-                      3. Responsabilidade
+                      {t("terms_3_title")}
                     </h3>
-                    <p>
-                      Mover ou eliminar e-mails no Kanban afeta a sua conta
-                      Outlook real. O utilizador é responsável pelas ações
-                      realizadas através desta interface.
-                    </p>
+                    <p>{t("terms_3_desc")}</p>
                   </div>
                 </>
               ) : (
                 <>
                   <div>
                     <h3 className="font-semibold text-slate-900 text-base mb-1">
-                      1. Nós não lemos os seus e-mails
+                      {t("privacy_1_title")}
                     </h3>
                     <p>
-                      A arquitetura desta aplicação foi pensada para a
-                      privacidade.{" "}
-                      <strong>
-                        O corpo dos seus e-mails, os remetentes e os anexos
-                        nunca são guardados na nossa base de dados.
-                      </strong>{" "}
-                      Eles vão diretamente da Microsoft para o seu ecrã.
+                      {t("privacy_1_desc_1")}
+                      <strong>{t("privacy_1_bold")}</strong>
+                      {t("privacy_1_desc_2")}
                     </p>
                   </div>
                   <div>
                     <h3 className="font-semibold text-slate-900 text-base mb-1">
-                      2. O que fica guardado no nosso servidor?
+                      {t("privacy_2_title")}
                     </h3>
-                    <p>
-                      Apenas "etiquetas" (metadados). Guardamos o ID técnico do
-                      e-mail, em que coluna do Kanban o colocou, as tags criadas
-                      e as configurações de Snooze.
-                    </p>
+                    <p>{t("privacy_2_desc")}</p>
                   </div>
                   <div>
                     <h3 className="font-semibold text-slate-900 text-base mb-1">
-                      3. Controlo Total
+                      {t("privacy_3_title")}
                     </h3>
-                    <p>
-                      Pode revogar o acesso da aplicação a qualquer momento nas
-                      definições de segurança da sua conta da Microsoft.
-                    </p>
+                    <p>{t("privacy_3_desc")}</p>
                   </div>
                 </>
               )}
             </div>
             <div className="mt-6 pt-4 border-t border-slate-100 flex justify-end">
               <Button variant="outline" onClick={() => setIsLegalOpen(false)}>
-                Fechar
+                {t("close")}
               </Button>
             </div>
           </DialogContent>

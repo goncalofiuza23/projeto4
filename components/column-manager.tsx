@@ -39,6 +39,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "./auth-provider";
+import { useLanguage } from "./language-provider";
 import {
   supabase,
   isSupabaseAvailable,
@@ -53,57 +54,19 @@ interface ColumnManagerProps {
 }
 
 const colorOptions = [
-  { value: "bg-blue-100 text-blue-800", label: "Azul", preview: "bg-blue-400" },
-  {
-    value: "bg-green-100 text-green-800",
-    label: "Verde",
-    preview: "bg-green-400",
-  },
-  {
-    value: "bg-yellow-100 text-yellow-800",
-    label: "Amarelo",
-    preview: "bg-yellow-400",
-  },
-  {
-    value: "bg-red-100 text-red-800",
-    label: "Vermelho",
-    preview: "bg-red-400",
-  },
-  {
-    value: "bg-purple-100 text-purple-800",
-    label: "Roxo",
-    preview: "bg-purple-400",
-  },
-  {
-    value: "bg-orange-100 text-orange-800",
-    label: "Laranja",
-    preview: "bg-orange-400",
-  },
-  { value: "bg-pink-100 text-pink-800", label: "Rosa", preview: "bg-pink-400" },
-  {
-    value: "bg-slate-100 text-slate-800",
-    label: "Cinza",
-    preview: "bg-slate-400",
-  },
+  { value: "bg-blue-100 text-blue-800", labelKey: "color_blue", preview: "bg-blue-400" },
+  { value: "bg-green-100 text-green-800", labelKey: "color_green", preview: "bg-green-400" },
+  { value: "bg-yellow-100 text-yellow-800", labelKey: "color_yellow", preview: "bg-yellow-400" },
+  { value: "bg-red-100 text-red-800", labelKey: "color_red", preview: "bg-red-400" },
+  { value: "bg-purple-100 text-purple-800", labelKey: "color_purple", preview: "bg-purple-400" },
+  { value: "bg-orange-100 text-orange-800", labelKey: "color_orange", preview: "bg-orange-400" },
+  { value: "bg-pink-100 text-pink-800", labelKey: "color_pink", preview: "bg-pink-400" },
+  { value: "bg-slate-100 text-slate-800", labelKey: "color_gray", preview: "bg-slate-400" },
 ];
 
 const iconOptions = [
-  "📁",
-  "📋",
-  "⚡",
-  "🔥",
-  "⭐",
-  "🎯",
-  "📌",
-  "🚀",
-  "💼",
-  "📊",
-  "🔔",
-  "✅",
-  "⏳",
-  "🔄",
-  "📝",
-  "💡",
+  "📁", "📋", "⚡", "🔥", "⭐", "🎯", "📌", "🚀", 
+  "💼", "📊", "🔔", "✅", "⏳", "🔄", "📝", "💡",
 ];
 
 function SortableColumnItem({
@@ -115,6 +78,7 @@ function SortableColumnItem({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useLanguage();
   const {
     attributes,
     listeners,
@@ -158,7 +122,7 @@ function SortableColumnItem({
               className={`text-[10px] font-semibold px-1.5 py-0 border-none ${column.color} bg-opacity-50`}
               variant="outline"
             >
-              Personalizada
+              {t("custom_badge")}
             </Badge>
           </div>
         </div>
@@ -190,7 +154,9 @@ export function ColumnManager({
   onColumnsChange,
 }: ColumnManagerProps) {
   const { account } = useAuth();
+  const { t } = useLanguage();
   const { toast } = useToast();
+  
   const [isOpen, setIsOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editingColumn, setEditingColumn] = useState<CustomColumn | null>(null);
@@ -245,8 +211,8 @@ export function ColumnManager({
       } catch (error) {
         console.error("Erro ao reordenar:", error);
         toast({
-          title: "Erro",
-          description: "Não foi possível guardar a nova ordem.",
+          title: t("error_title"),
+          description: t("error_reorder"),
           variant: "destructive",
         });
         setLocalColumns(columns);
@@ -270,8 +236,8 @@ export function ColumnManager({
       });
       if (result) {
         toast({
-          title: "Coluna criada",
-          description: `A coluna "${newColumn.name}" foi criada com sucesso.`,
+          title: t("toast_col_created"),
+          description: t("toast_col_created_desc").replace("{name}", newColumn.name),
         });
         setNewColumn({
           name: "",
@@ -283,8 +249,8 @@ export function ColumnManager({
       }
     } catch (error) {
       toast({
-        title: "Erro",
-        description: "Não foi possível criar a coluna.",
+        title: t("error_title"),
+        description: t("error_create_col"),
         variant: "destructive",
       });
     }
@@ -304,16 +270,16 @@ export function ColumnManager({
       });
       if (result) {
         toast({
-          title: "Coluna atualizada",
-          description: `A coluna "${column.name}" foi atualizada com sucesso.`,
+          title: t("toast_col_updated"),
+          description: t("toast_col_updated_desc").replace("{name}", column.name),
         });
         setEditingColumn(null);
         onColumnsChange();
       }
     } catch (error) {
       toast({
-        title: "Erro",
-        description: "Não foi possível atualizar a coluna.",
+        title: t("error_title"),
+        description: t("error_update_col"),
         variant: "destructive",
       });
     }
@@ -340,16 +306,16 @@ export function ColumnManager({
 
       if (result) {
         toast({
-          title: "Coluna excluída",
-          description: `A coluna "${columnToDelete.name}" foi excluída e os emails foram movidos para a Caixa de Entrada.`,
+          title: t("toast_col_deleted"),
+          description: t("toast_col_deleted_desc").replace("{name}", columnToDelete.name),
         });
         setColumnToDelete(null);
         onColumnsChange();
       }
     } catch (error) {
       toast({
-        title: "Erro",
-        description: "Não foi possível excluir a coluna.",
+        title: t("error_title"),
+        description: t("error_delete_col"),
         variant: "destructive",
       });
       setColumnToDelete(null);
@@ -366,20 +332,20 @@ export function ColumnManager({
             className="w-full justify-start rounded-xl font-medium text-slate-600 border-slate-200 hover:bg-slate-50"
           >
             <Columns3 className="h-4 w-4 mr-2 text-blue-600" />
-            Gerir Colunas
+            {t("manage_columns")}
           </Button>
         </DialogTrigger>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-0 rounded-2xl border-slate-200 shadow-2xl">
           <DialogHeader className="px-8 py-5 border-b border-slate-100 bg-slate-50/50">
             <DialogTitle className="text-xl font-bold text-slate-800">
-              Organização do Kanban
+              {t("kanban_org_title")}
             </DialogTitle>
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6 custom-scrollbar bg-slate-50/30">
             <div className="flex justify-between items-center">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                A sua Estrutura
+                {t("your_structure")}
               </h3>
               <Button
                 onClick={() => setIsCreateOpen(true)}
@@ -387,7 +353,7 @@ export function ColumnManager({
                 className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-sm px-4"
               >
                 <Plus className="h-4 w-4 mr-2" />
-                Nova Coluna
+                {t("new_col_btn")}
               </Button>
             </div>
 
@@ -402,15 +368,15 @@ export function ColumnManager({
                   </div>
                   <div>
                     <p className="font-bold text-sm text-slate-600">
-                      Caixa de Entrada
+                      {t("col_inbox")}
                     </p>
                     <p className="text-[10px] text-slate-400 font-medium mt-0.5">
-                      Coluna principal de receção (fixa)
+                      {t("inbox_desc")}
                     </p>
                   </div>
                 </div>
                 <Badge className="bg-blue-100/50 text-blue-700 border-none shadow-none text-[10px] uppercase font-bold tracking-wide mr-2">
-                  Sistema
+                  {t("system_badge")}
                 </Badge>
               </div>
 
@@ -438,9 +404,9 @@ export function ColumnManager({
 
               {columns.length === 0 && (
                 <div className="text-center py-10 text-slate-400 border-2 border-dashed border-slate-200 rounded-2xl bg-white/50">
-                  <p className="font-medium">O seu Kanban está vazio.</p>
+                  <p className="font-medium">{t("empty_kanban")}</p>
                   <p className="text-xs mt-1">
-                    Crie colunas para organizar o seu fluxo de trabalho.
+                    {t("empty_kanban_desc")}
                   </p>
                 </div>
               )}
@@ -453,7 +419,7 @@ export function ColumnManager({
         <DialogContent className="sm:max-w-md p-0 rounded-2xl overflow-hidden border-slate-200 shadow-2xl">
           <DialogHeader className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
             <DialogTitle className="text-lg font-bold text-slate-800">
-              Criar Nova Coluna
+              {t("create_col_title")}
             </DialogTitle>
           </DialogHeader>
           <div className="p-6 space-y-6 bg-white">
@@ -462,7 +428,7 @@ export function ColumnManager({
                 htmlFor="column-name"
                 className="text-xs font-bold text-slate-400 uppercase tracking-wider"
               >
-                Nome da Coluna
+                {t("col_name_label")}
               </Label>
               <Input
                 id="column-name"
@@ -470,14 +436,14 @@ export function ColumnManager({
                 onChange={(e) =>
                   setNewColumn({ ...newColumn, name: e.target.value })
                 }
-                placeholder="Ex: Em Revisão, Urgente, Feito..."
+                placeholder={t("col_name_placeholder")}
                 className="h-11 rounded-xl bg-slate-50 border-slate-200 shadow-none focus-visible:ring-1 focus-visible:ring-blue-400 focus-visible:bg-white font-medium"
               />
             </div>
 
             <div className="space-y-2">
               <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                Identidade Visual
+                {t("visual_id_label")}
               </Label>
               <div className="grid grid-cols-4 gap-2.5 mt-2">
                 {colorOptions.map((color) => (
@@ -496,7 +462,8 @@ export function ColumnManager({
                       className={`w-full h-6 rounded-md ${color.preview} mb-1.5 shadow-[inset_0_2px_4px_rgba(0,0,0,0.06)]`}
                     ></div>
                     <span className="text-[10px] font-bold text-slate-600">
-                      {color.label}
+                      {/* @ts-ignore */}
+                      {t(color.labelKey)}
                     </span>
                   </button>
                 ))}
@@ -505,7 +472,7 @@ export function ColumnManager({
 
             <div className="space-y-2">
               <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                Ícone Representativo
+                {t("icon_label")}
               </Label>
               <div className="grid grid-cols-8 gap-2 mt-2">
                 {iconOptions.map((icon) => (
@@ -530,14 +497,14 @@ export function ColumnManager({
                 onClick={() => setIsCreateOpen(false)}
                 className="rounded-xl font-semibold text-slate-500 hover:bg-slate-100"
               >
-                Cancelar
+                {t("cancel_btn")}
               </Button>
               <Button
                 onClick={createColumn}
                 disabled={!newColumn.name.trim()}
                 className="rounded-xl px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md shadow-blue-200"
               >
-                Guardar
+                {t("save_btn")}
               </Button>
             </div>
           </div>
@@ -552,7 +519,7 @@ export function ColumnManager({
           <DialogContent className="sm:max-w-md p-0 rounded-2xl overflow-hidden border-slate-200 shadow-2xl">
             <DialogHeader className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
               <DialogTitle className="text-lg font-bold text-slate-800">
-                Editar Coluna
+                {t("edit_col_title")}
               </DialogTitle>
             </DialogHeader>
             <div className="p-6 space-y-6 bg-white">
@@ -561,7 +528,7 @@ export function ColumnManager({
                   htmlFor="edit-column-name"
                   className="text-xs font-bold text-slate-400 uppercase tracking-wider"
                 >
-                  Nome da Coluna
+                  {t("col_name_label")}
                 </Label>
                 <Input
                   id="edit-column-name"
@@ -575,7 +542,7 @@ export function ColumnManager({
 
               <div className="space-y-2">
                 <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  Identidade Visual
+                  {t("visual_id_label")}
                 </Label>
                 <div className="grid grid-cols-4 gap-2.5 mt-2">
                   {colorOptions.map((color) => (
@@ -597,7 +564,8 @@ export function ColumnManager({
                         className={`w-full h-6 rounded-md ${color.preview} mb-1.5 shadow-[inset_0_2px_4px_rgba(0,0,0,0.06)]`}
                       ></div>
                       <span className="text-[10px] font-bold text-slate-600">
-                        {color.label}
+                        {/* @ts-ignore */}
+                        {t(color.labelKey)}
                       </span>
                     </button>
                   ))}
@@ -606,7 +574,7 @@ export function ColumnManager({
 
               <div className="space-y-2">
                 <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  Ícone Representativo
+                  {t("icon_label")}
                 </Label>
                 <div className="grid grid-cols-8 gap-2 mt-2">
                   {iconOptions.map((icon) => (
@@ -633,13 +601,13 @@ export function ColumnManager({
                   onClick={() => setEditingColumn(null)}
                   className="rounded-xl font-semibold text-slate-500 hover:bg-slate-100"
                 >
-                  Cancelar
+                  {t("cancel_btn")}
                 </Button>
                 <Button
                   onClick={() => updateColumn(editingColumn)}
                   className="rounded-xl px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md shadow-blue-200"
                 >
-                  Salvar Alterações
+                  {t("save_changes_btn")}
                 </Button>
               </div>
             </div>
@@ -654,22 +622,21 @@ export function ColumnManager({
         <DialogContent className="sm:max-w-md p-0 rounded-2xl overflow-hidden border-slate-200 shadow-2xl">
           <DialogHeader className="px-6 py-4 border-b border-red-100 bg-red-50/50">
             <DialogTitle className="text-lg font-bold text-red-800 flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5" /> Eliminar Coluna
+              <AlertTriangle className="h-5 w-5" /> {t("delete_col_title")}
             </DialogTitle>
           </DialogHeader>
           <div className="p-6 space-y-4 bg-white">
             <p className="text-slate-700 font-medium">
-              Tem a certeza que deseja eliminar a coluna{" "}
+              {t("delete_col_confirm")}{" "}
               <strong className="text-slate-900">
                 "{columnToDelete?.name}"
               </strong>
               ?
             </p>
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-sm text-slate-500 leading-relaxed">
-              Os e-mails não serão perdidos. Qualquer e-mail que esteja nesta
-              coluna voltará imediatamente para a sua{" "}
+              {t("delete_col_warn")}{" "}
               <strong className="font-semibold text-slate-700">
-                Caixa de Entrada
+                {t("col_inbox")}
               </strong>
               .
             </div>
@@ -680,13 +647,13 @@ export function ColumnManager({
                 onClick={() => setColumnToDelete(null)}
                 className="rounded-xl font-semibold text-slate-500 hover:bg-slate-100"
               >
-                Cancelar
+                {t("cancel_btn")}
               </Button>
               <Button
                 onClick={confirmDeleteColumn}
                 className="rounded-xl px-6 bg-red-600 hover:bg-red-700 text-white font-bold shadow-md shadow-red-200"
               >
-                Eliminar Coluna
+                {t("delete_col_title")}
               </Button>
             </div>
           </div>

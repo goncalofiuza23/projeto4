@@ -27,6 +27,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { useLanguage } from "./language-provider";
 
 interface KanbanColumnProps {
   id: string;
@@ -59,6 +60,7 @@ export function KanbanColumn({
 }: KanbanColumnProps) {
   const { over } = useDndContext();
   const { setNodeRef, isOver } = useDroppable({ id });
+  const { t } = useLanguage();
 
   const [isSnoozedOpen, setIsSnoozedOpen] = useState(false);
   const [isFetchingMore, setIsFetchingMore] = useState(false);
@@ -105,7 +107,6 @@ export function KanbanColumn({
     return { activeThreads: active, snoozedThreads: snoozed };
   }, [threads, emailsMetadata]);
 
-  // 👇 Calcula quantos e-mails estão por ler na coluna 👇
   const unreadCount = useMemo(() => {
     return activeThreads.filter(t => t.hasUnread).length;
   }, [activeThreads]);
@@ -128,35 +129,35 @@ export function KanbanColumn({
       const lastMonth = new Date(today);
       lastMonth.setMonth(lastMonth.getMonth() - 1);
 
-      if (date >= today) return "Hoje";
-      if (date >= yesterday) return "Ontem";
-      if (date >= lastWeek) return "Última Semana";
-      if (date >= lastMonth) return "Último Mês";
-      return "Mais Antigos";
+      if (date >= today) return t("group_today");
+      if (date >= yesterday) return t("group_yesterday");
+      if (date >= lastWeek) return t("group_last_week");
+      if (date >= lastMonth) return t("group_last_month");
+      return t("group_older");
     };
 
     const groups: Record<string, EmailThread[]> = {
-      Hoje: [],
-      Ontem: [],
-      "Última Semana": [],
-      "Último Mês": [],
-      "Mais Antigos": [],
+      [t("group_today")]: [],
+      [t("group_yesterday")]: [],
+      [t("group_last_week")]: [],
+      [t("group_last_month")]: [],
+      [t("group_older")]: [],
     };
 
     sortedThreads.forEach((thread) => {
       const groupName = getTimeGroup(thread.lastActivity);
+      if (!groups[groupName]) groups[groupName] = []; 
       groups[groupName].push(thread);
     });
 
     return groups;
-  }, [activeThreads]);
+  }, [activeThreads, t]);
 
   const activeGroups = Object.entries(groupedThreads).filter(
     ([_, groupThreads]) => groupThreads.length > 0,
   );
 
   useEffect(() => {
-    // Só ativa o infinite scroll se houver mais de 20 e-mails na coluna
     if (!onLoadMore || activeThreads.length < 20) return;
 
     const observer = new IntersectionObserver(
@@ -224,7 +225,7 @@ export function KanbanColumn({
               variant="secondary"
               className={`${color} ml-2 text-[11px] h-5 px-2 font-semibold`}
             >
-              {activeThreads.length} {unreadCount > 0 ? <span className="ml-1 opacity-80">({unreadCount} por ler)</span> : ""}
+              {activeThreads.length} {unreadCount > 0 ? <span className="ml-1 opacity-80">({unreadCount} {t("unread_emails")})</span> : ""}
             </Badge>
           </CardTitle>
 
@@ -261,8 +262,8 @@ export function KanbanColumn({
                     <span className="text-[11px] font-semibold text-indigo-700">
                       {snoozedThreads.length}{" "}
                       {snoozedThreads.length === 1
-                        ? "Adiado"
-                        : "Adiados"}
+                        ? t("snoozed_single")
+                        : t("snoozed_plural")}
                     </span>
                   </div>
                   <Button
@@ -309,7 +310,7 @@ export function KanbanColumn({
                   <Inbox className="h-5 w-5 text-slate-300" />
                 </div>
                 <p className="text-xs font-medium text-slate-400">
-                  Tudo em dia!
+                  {t("col_all_clear")}
                 </p>
               </div>
             ) : (
@@ -346,7 +347,7 @@ export function KanbanColumn({
                     {isFetchingMore && (
                       <div className="flex items-center gap-2 text-slate-400 bg-white px-3 py-1.5 rounded-full shadow-sm border border-slate-100">
                         <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
-                        <span className="text-[10px] font-medium">A carregar...</span>
+                        <span className="text-[10px] font-medium">{t("loading_more")}</span>
                       </div>
                     )}
                   </div>
@@ -371,10 +372,10 @@ export function KanbanColumn({
                       {isFetchingMore ? (
                         <>
                           <Loader2 className="h-3 w-3 animate-spin mr-1.5 text-blue-500" />
-                          A procurar...
+                          {t("searching")}
                         </>
                       ) : (
-                        "Procurar mais antigos"
+                        t("search_older")
                       )}
                     </Button>
                   </div>

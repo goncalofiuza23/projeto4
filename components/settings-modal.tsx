@@ -12,9 +12,11 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { UserAvatar } from "./user-avatar";
 import { BACKGROUNDS } from "./dashboard-layout";
+import { useLanguage, type Language } from "./language-provider";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -33,16 +35,17 @@ export function SettingsModal({
   currentBgId,
   onBgChange,
 }: SettingsModalProps) {
-  const currentBg =
-    BACKGROUNDS.find((b) => b.id === currentBgId) || BACKGROUNDS[0];
+  const currentBg = BACKGROUNDS.find((b) => b.id === currentBgId) || BACKGROUNDS[0];
+  const { t, language, setLanguage } = useLanguage(); 
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md rounded-2xl">
         <DialogHeader>
-          <DialogTitle>Definições Gerais</DialogTitle>
+          <DialogTitle>{t("settings_title")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-6 py-4">
+          
           {/* Perfil */}
           <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
             <UserAvatar
@@ -61,9 +64,53 @@ export function SettingsModal({
             </div>
           </div>
 
+          {/* Seletor de Idioma (COM BANDEIRAS REAIS EM IMAGEM) */}
           <div className="space-y-2">
             <Label className="text-xs font-bold text-slate-500 uppercase">
-              Tema do Painel
+              {t("settings_language")}
+            </Label>
+            <Select 
+              onValueChange={(val) => setLanguage(val as Language)} 
+              value={language}
+            >
+              <SelectTrigger className="w-full h-11 bg-white border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors">
+                <SelectValue /> 
+              </SelectTrigger>
+              <SelectContent className="rounded-xl">
+                <SelectItem value="pt" className="text-sm py-2">
+                  <div className="flex items-center gap-2.5">
+                    {/* Bandeira de Portugal 🇵🇹 */}
+                    <img 
+                      src="https://flagcdn.com/w20/pt.png" 
+                      srcSet="https://flagcdn.com/w40/pt.png 2x"
+                      width="16" 
+                      alt="Portugal" 
+                      className="rounded-[2px] shadow-sm"
+                    />
+                    Português
+                  </div>
+                </SelectItem>
+                <SelectItem value="en" className="text-sm py-2">
+                  <div className="flex items-center gap-2.5">
+                    {/* Bandeira dos EUA 🇺🇸 */}
+                    <img 
+                      src="https://flagcdn.com/w20/us.png" 
+                      srcSet="https://flagcdn.com/w40/us.png 2x"
+                      width="16" 
+                      alt="USA" 
+                      className="rounded-[2px] shadow-sm"
+                    />
+                    English (US)
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Seletor de Tema */}
+          <div className="space-y-2">
+            <Label className="text-xs font-bold text-slate-500 uppercase">
+              {t("settings_theme")}
             </Label>
             <Select onValueChange={onBgChange} value={currentBgId}>
               <SelectTrigger className="w-full h-11 bg-white border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors">
@@ -83,7 +130,10 @@ export function SettingsModal({
                         : {}
                     }
                   />
-                  <span className="truncate">{currentBg.name}</span>
+                  <span className="truncate">
+                    {/* @ts-ignore */}
+                    {t(currentBg.nameKey) || currentBg.name} 
+                  </span>
                 </div>
               </SelectTrigger>
               <SelectContent className="rounded-xl">
@@ -107,13 +157,15 @@ export function SettingsModal({
                             : {}
                         }
                       />
-                      {bg.name}
+                      {/* @ts-ignore */}
+                      {t(bg.nameKey) || bg.name}
                     </div>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
+          
         </div>
       </DialogContent>
     </Dialog>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { AuthProvider, useAuth } from "@/components/auth-provider"; 
 import { supabase, isSupabaseAvailable, safeSupabaseOperation } from "@/lib/supabase";
+import { useLanguage } from "@/components/language-provider";
 import { Users, ArrowLeft, Activity, Search, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,15 +20,15 @@ interface UserStat {
 
 function BackofficeContent() {
   const { account, isLoading: authLoading } = useAuth();
+  const { t, language } = useLanguage();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [users, setUsers] = useState<UserStat[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   
-  // 👇 Estado para a barra de pesquisa
   const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
-    if (!account?.homeAccountId || !isSupabaseAvailable()) {
+    if (!account?.username || !isSupabaseAvailable()) {
       if (!authLoading) setIsAdmin(false);
       return;
     }
@@ -37,7 +38,7 @@ function BackofficeContent() {
         const { data } = await supabase!
           .from("user_stats")
           .select("is_admin")
-          .eq("user_id", account.homeAccountId)
+          .eq("email", account.username)
           .single();
 
         if (data?.is_admin) {
@@ -50,7 +51,7 @@ function BackofficeContent() {
     };
 
     checkAdmin();
-  }, [account?.homeAccountId, authLoading]);
+  }, [account?.username, authLoading]);
 
   const loadAllUsers = async () => {
     await safeSupabaseOperation(async () => {
@@ -65,7 +66,8 @@ function BackofficeContent() {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("pt-PT", {
+    const locale = language === "en" ? "en-US" : "pt-PT";
+    return new Date(dateString).toLocaleDateString(locale, {
       day: "2-digit",
       month: "short",
       year: "numeric",
@@ -79,7 +81,7 @@ function BackofficeContent() {
       <div className="flex h-screen items-center justify-center bg-slate-50 text-slate-500">
         <div className="flex flex-col items-center gap-3">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="text-sm font-medium">A verificar credenciais...</span>
+          <span className="text-sm font-medium">{t("checking_creds")}</span>
         </div>
       </div>
     );
@@ -89,10 +91,10 @@ function BackofficeContent() {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-slate-50 space-y-4">
         <ShieldCheck className="h-16 w-16 text-slate-300" />
-        <h1 className="text-2xl font-bold text-slate-800">Área Reservada</h1>
-        <p className="text-slate-500 font-medium">Apenas administradores podem aceder a esta página.</p>
+        <h1 className="text-2xl font-bold text-slate-800">{t("restricted_area")}</h1>
+        <p className="text-slate-500 font-medium">{t("admin_only")}</p>
         <Button onClick={() => window.location.href = "/"} variant="outline" className="mt-4 rounded-xl h-10 px-6">
-          <ArrowLeft className="mr-2 h-4 w-4" /> Voltar à Plataforma
+          <ArrowLeft className="mr-2 h-4 w-4" /> {t("back_to_platform")}
         </Button>
       </div>
     );
@@ -105,7 +107,6 @@ function BackofficeContent() {
     return lastActive >= sevenDaysAgo;
   }).length;
 
-  // 👇 Filtra os utilizadores com base no que escreveste na barra de pesquisa
   const filteredUsers = users.filter(user => 
     user.email.toLowerCase().includes(searchTerm.toLowerCase()) || 
     user.user_id.toLowerCase().includes(searchTerm.toLowerCase())
@@ -120,12 +121,12 @@ function BackofficeContent() {
           <div>
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
               <ShieldCheck className="h-6 w-6 text-blue-600" />
-              Painel de Administração
+              {t("admin_panel_title")}
             </h1>
-            <p className="text-slate-500 text-sm mt-1 font-medium">Monitorização e métricas da plataforma Kanban.</p>
+            <p className="text-slate-500 text-sm mt-1 font-medium">{t("admin_panel_desc")}</p>
           </div>
           <Button onClick={() => window.location.href = "/"} variant="outline" className="bg-white border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl shadow-sm h-10">
-            <ArrowLeft className="mr-2 h-4 w-4" /> Sair
+            <ArrowLeft className="mr-2 h-4 w-4" /> {t("exit_btn")}
           </Button>
         </div>
 
@@ -134,7 +135,7 @@ function BackofficeContent() {
           <Card className="bg-white border-slate-200 shadow-sm rounded-2xl overflow-hidden">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Total Utilizadores</p>
+                <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">{t("total_users")}</p>
                 <div className="p-2 bg-blue-50 rounded-lg"><Users className="h-4 w-4 text-blue-600" /></div>
               </div>
               <div className="mt-4 flex items-baseline gap-2">
@@ -146,7 +147,7 @@ function BackofficeContent() {
           <Card className="bg-white border-slate-200 shadow-sm rounded-2xl overflow-hidden">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Ativos (7 Dias)</p>
+                <p className="text-sm font-semibold text-slate-500 uppercase tracking-wider">{t("active_7_days")}</p>
                 <div className="p-2 bg-emerald-50 rounded-lg"><Activity className="h-4 w-4 text-emerald-600" /></div>
               </div>
               <div className="mt-4 flex items-baseline gap-2">
@@ -159,14 +160,14 @@ function BackofficeContent() {
         {/* Tabela Branca e Limpa */}
         <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
           <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-white">
-            <h2 className="text-base font-bold text-slate-800">Utilizadores Registados</h2>
+            <h2 className="text-base font-bold text-slate-800">{t("registered_users")}</h2>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <input 
                 type="text" 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Procurar utilizador..." 
+                placeholder={t("search_user_placeholder")} 
                 className="pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all w-64 bg-slate-50"
               />
             </div>
@@ -176,23 +177,22 @@ function BackofficeContent() {
             <table className="w-full text-sm text-left">
               <thead className="text-xs uppercase tracking-wider bg-slate-50/80 text-slate-500 border-b border-slate-200">
                 <tr>
-                  <th className="px-6 py-4 font-bold">Conta & E-mail</th>
-                  <th className="px-6 py-4 font-bold">Adesão</th>
-                  <th className="px-6 py-4 font-bold">Última Atividade</th>
+                  <th className="px-6 py-4 font-bold">{t("table_account")}</th>
+                  <th className="px-6 py-4 font-bold">{t("table_joined")}</th>
+                  <th className="px-6 py-4 font-bold">{t("table_last_active")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {loadingData ? (
-                  <tr><td colSpan={3} className="px-6 py-12 text-center text-slate-500 font-medium">A carregar informações...</td></tr>
+                  <tr><td colSpan={3} className="px-6 py-12 text-center text-slate-500 font-medium">{t("loading_info")}</td></tr>
                 ) : filteredUsers.length === 0 ? (
-                  <tr><td colSpan={3} className="px-6 py-12 text-center text-slate-500 font-medium">Nenhum utilizador encontrado.</td></tr>
+                  <tr><td colSpan={3} className="px-6 py-12 text-center text-slate-500 font-medium">{t("no_user_found")}</td></tr>
                 ) : (
                   filteredUsers.map((user) => {
-                    // 👇 Lógica Inteligente para calcular se o utilizador está Online
                     const lastActiveTime = new Date(user.last_active).getTime();
                     const now = new Date().getTime();
                     const diffInMinutes = (now - lastActiveTime) / (1000 * 60);
-                    const isOnline = diffInMinutes < 15; // Online se a última atividade foi há menos de 15 mins
+                    const isOnline = diffInMinutes < 15; 
 
                     return (
                       <tr key={user.user_id} className="hover:bg-slate-50/50 transition-colors">
@@ -207,8 +207,7 @@ function BackofficeContent() {
                         <td className="px-6 py-4">
                           <span className="inline-flex items-center gap-1.5 text-slate-600 font-medium whitespace-nowrap">
                             
-                            {/* 👇 A Bolinha Mágica Online/Offline 👇 */}
-                            <span className="relative flex h-2 w-2" title={isOnline ? "Online Agora" : "Offline"}>
+                            <span className="relative flex h-2 w-2" title={isOnline ? t("online_now") : t("offline")}>
                               {isOnline && (
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                               )}
