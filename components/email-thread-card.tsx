@@ -30,7 +30,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { EmailThread } from "@/lib/microsoft-graph";
-import type { EmailMetadata } from "@/lib/supabase"; // 👈 Removido o Subtask daqui
+import type { EmailMetadata } from "@/lib/supabase";
 import { EmailViewer } from "./email-viewer";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import {
@@ -56,7 +56,6 @@ import { useLanguage } from "./language-provider";
 import { GraphService } from "@/lib/microsoft-graph";
 import { useToast } from "@/hooks/use-toast";
 
-// 👇 Adicionado o tipo Subtask localmente 👇
 export interface Subtask {
   id: string;
   text: string;
@@ -105,7 +104,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
   const [customSnoozeDate, setCustomSnoozeDate] = useState("");
 
   const [newTag, setNewTag] = useState("");
-  const [priority, setPriority] = useState<string | undefined>(undefined); // 👈 null mudou para undefined
+  const [priority, setPriority] = useState<string | undefined>(undefined);
   const [tags, setTags] = useState<string[]>([]);
   const [dueDateStr, setDueDateStr] = useState<string>(""); 
 
@@ -294,7 +293,6 @@ export const EmailThreadCard = memo(function EmailThreadCard({
   };
 
   const handlePriorityChange = (newPriority: string) => {
-    // 👇 Corrigido para `undefined` em vez de `null` 👇
     const val = newPriority === "nenhuma" ? undefined : newPriority as EmailMetadata["priority"];
     setPriority(val);
     uniqueEmails.forEach((e) => {

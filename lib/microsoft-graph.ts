@@ -200,7 +200,6 @@ export class GraphService {
     }
   }
 
-  // 👇 1. CORREÇÃO DA CAIXA DE ENTRADA: Pede estritamente à pasta "inbox" e não a todas!
   async getEmails(top = 50): Promise<Email[]> {
     const response = await this.makeRequest(
       `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=${top}&$orderby=receivedDateTime desc&$select=id,subject,bodyPreview,body,from,receivedDateTime,sentDateTime,isRead,importance,hasAttachments,toRecipients,ccRecipients,bccRecipients,replyTo,parentFolderId,conversationId,conversationIndex,internetMessageId`,
@@ -230,7 +229,6 @@ export class GraphService {
     }));
   }
 
-  // 👇 2. FUNÇÃO INTELIGENTE DE LEITURA DE PASTAS ESPECIAIS (Resolve o problema dos idiomas)
   private async getMessagesFromFolder(standardFolder: string, mappedFolder: string, folderType: string, top: number): Promise<Email[]> {
     try {
       const response = await this.makeRequest(

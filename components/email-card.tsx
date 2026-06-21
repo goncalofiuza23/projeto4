@@ -93,7 +93,6 @@ export function EmailCard({
     );
   };
 
-  // 👇 Correção: Verifica diretamente nas propriedades do Email em vez de usar o GraphService vazio
   const isEmailSent = email.folderType === "sent" || (email as any).isFromMe;
 
   return (
