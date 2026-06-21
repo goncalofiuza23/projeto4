@@ -15,40 +15,46 @@ if (!supabaseAnonKey) {
   );
 }
 
-// Criar cliente Supabase apenas se as variáveis estiverem definidas
 const supabase =
   supabaseUrl && supabaseAnonKey
     ? createClient(supabaseUrl, supabaseAnonKey)
     : null;
 
-// Função helper para verificar se Supabase está disponível
 export const isSupabaseAvailable = () => {
   return supabase !== null;
 };
 
-// Função helper para operações seguras com Supabase
-export const safeSupabaseOperation = async (operation, fallback) => {
+export const safeSupabaseOperation = async <T,>(
+  operation: () => Promise<T>, 
+  fallback: T
+): Promise<T> => {
   if (!isSupabaseAvailable()) {
     console.warn("⚠️ Supabase não está disponível. Operação ignorada.");
-    return fallback || null;
+    return fallback;
   }
 
   try {
     return await operation();
   } catch (error) {
     console.error("❌ Erro na operação Supabase:", error);
-    return fallback || null;
+    return fallback;
   }
 };
 
 export { supabase };
+
+export interface Subtask {
+  id: string;
+  text: string;
+  completed: boolean;
+}
 
 export interface EmailMetadata {
   id?: string;
   email_id: string;
   user_id: string;
   column_id: string | null;
-  priority: "baixa" | "media" | "alta" | "urgente";
+  priority: "baixa" | "media" | "alta" | "urgente" | undefined;
   tags: string[];
   snoozed_until?: string | null;
   subtasks?: Subtask[];

@@ -45,8 +45,7 @@ export function SettingsModal({
           <DialogTitle>{t("settings_title")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-6 py-4">
-          
-          {/* Perfil */}
+        
           <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
             <UserAvatar
               name={account?.name}
@@ -64,7 +63,6 @@ export function SettingsModal({
             </div>
           </div>
 
-          {/* Seletor de Idioma (COM BANDEIRAS REAIS EM IMAGEM) */}
           <div className="space-y-2">
             <Label className="text-xs font-bold text-slate-500 uppercase">
               {t("settings_language")}
@@ -107,7 +105,6 @@ export function SettingsModal({
             </Select>
           </div>
 
-          {/* Seletor de Tema */}
           <div className="space-y-2">
             <Label className="text-xs font-bold text-slate-500 uppercase">
               {t("settings_theme")}

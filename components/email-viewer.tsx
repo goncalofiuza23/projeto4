@@ -32,11 +32,17 @@ import {
 import { useAuth } from "./auth-provider";
 import { useLanguage } from "./language-provider";
 import { GraphService, type Email } from "@/lib/microsoft-graph";
-import type { EmailMetadata, Subtask } from "@/lib/supabase";
+import type { EmailMetadata} from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { EmailComposer } from "./email-composer";
 import { Input } from "@/components/ui/input";
 import { UserAvatar } from "./user-avatar";
+
+export interface Subtask {
+  id: string;
+  text: string;
+  completed: boolean;
+}
 
 interface EmailViewerProps {
   email: Email;

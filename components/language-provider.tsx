@@ -335,6 +335,9 @@ const translations = {
     new_task: "Nova Tarefa",
     delete_email_desc: "Tem a certeza de que pretende eliminar esta mensagem? Esta ação moverá o e-mail para a pasta de Itens Eliminados.",
     content_unavailable: "Conteúdo não disponível",
+    delete_btn: "Eliminar",
+    close_btn: "Fechar",
+    delete_email_title: "Eliminar E-mail",
 
     // Backoffice / Admin
     checking_creds: "A verificar credenciais...",
@@ -690,6 +693,9 @@ const translations = {
     new_task: "New Task",
     delete_email_desc: "Are you sure you want to delete this message? This action will move the email to the Deleted Items folder.",
     content_unavailable: "Content not available",
+    delete_btn: "Delete",
+    close_btn: "Close",
+    delete_email_title: "Delete Email",
 
     // Backoffice / Admin
     checking_creds: "Checking credentials...",

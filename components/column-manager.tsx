@@ -206,7 +206,7 @@ export function ColumnManager({
           );
           await Promise.all(updates);
           return true;
-        });
+        }, false); // 👈 FALLBACK ADICIONADO AQUI
         onColumnsChange();
       } catch (error) {
         console.error("Erro ao reordenar:", error);
@@ -233,7 +233,8 @@ export function ColumnManager({
         });
         if (error) throw error;
         return true;
-      });
+      }, false); // 👈 FALLBACK ADICIONADO AQUI
+      
       if (result) {
         toast({
           title: t("toast_col_created"),
@@ -267,7 +268,8 @@ export function ColumnManager({
           .eq("user_id", account.homeAccountId);
         if (error) throw error;
         return true;
-      });
+      }, false); // 👈 FALLBACK ADICIONADO AQUI
+      
       if (result) {
         toast({
           title: t("toast_col_updated"),
@@ -302,7 +304,7 @@ export function ColumnManager({
           .eq("user_id", account.homeAccountId);
         if (error) throw error;
         return true;
-      });
+      }, false); // 👈 FALLBACK ADICIONADO AQUI
 
       if (result) {
         toast({

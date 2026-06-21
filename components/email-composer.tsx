@@ -71,14 +71,16 @@ function AutocompleteEmailInput({
   onChange, 
   placeholder, 
   required, 
-  accessToken 
+  accessToken,
+  className
 }: { 
   id?: string, 
   value: string, 
   onChange: (val: string) => void, 
   placeholder?: string, 
   required?: boolean, 
-  accessToken: string | null 
+  accessToken: string | null,
+  className?: string
 }) {
   const { t } = useLanguage();
   const [suggestions, setSuggestions] = useState<ContactSuggestion[]>([]);
@@ -219,7 +221,7 @@ function AutocompleteEmailInput({
   };
 
   return (
-    <div className="relative w-full" ref={wrapperRef}>
+    <div className={`relative w-full ${className || ""}`} ref={wrapperRef}>
       <div 
         className="min-h-[40px] w-full bg-slate-50 border border-slate-200 rounded-xl px-2 py-1.5 flex flex-wrap items-center gap-1.5 focus-within:ring-1 focus-within:ring-blue-400 focus-within:bg-white cursor-text transition-colors"
         onClick={() => inputRef.current?.focus()}
@@ -408,7 +410,7 @@ export function EmailComposer({
         if (colsData) {
           setCustomColumns(colsData);
         }
-      });
+      }, null);
     };
 
     loadData();
@@ -439,7 +441,7 @@ export function EmailComposer({
           signatures: updatedSignatures,
           updated_at: new Date().toISOString(),
         });
-      });
+      }, null);
     }
 
     toast({
@@ -459,7 +461,7 @@ export function EmailComposer({
           signatures: updatedSignatures,
           updated_at: new Date().toISOString(),
         });
-      });
+      }, null);
     }
     
     toast({
@@ -671,7 +673,7 @@ ${ccLine}<b>${t("history_subject")}</b> ${originalEmail.subject || ""}<br>
         ...prev,
         body: {
           ...prev.body,
-          content: editorRef.current.innerHTML,
+          content: editorRef.current!.innerHTML,
         },
       }));
       checkFormattingState();
@@ -759,16 +761,16 @@ ${ccLine}<b>${t("history_subject")}</b> ${originalEmail.subject || ""}<br>
                await graphService.moveToFolder(originalEmail.id, "archive");
                await safeSupabaseOperation(async () => {
                   await supabase!.from('email_metadata').upsert({ user_id: account.homeAccountId, email_id: originalEmail.id, column_id: 'archive', updated_at: new Date().toISOString() });
-               });
+               }, null);
             } else if (sendAction.type === 'snooze') {
                const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(8,0,0,0);
                await safeSupabaseOperation(async () => {
                   await supabase!.from('email_metadata').upsert({ user_id: account.homeAccountId, email_id: originalEmail.id, snoozed_until: d.toISOString(), updated_at: new Date().toISOString() });
-               });
+               }, null);
             } else if (sendAction.type === 'column' && sendAction.payload) {
                await safeSupabaseOperation(async () => {
                   await supabase!.from('email_metadata').upsert({ user_id: account.homeAccountId, email_id: originalEmail.id, column_id: sendAction.payload, updated_at: new Date().toISOString() });
-               });
+               }, null);
             }
           } catch (e) {
             console.error("Erro a atualizar cartão após envio", e);
@@ -1194,7 +1196,7 @@ ${ccLine}<b>${t("history_subject")}</b> ${originalEmail.subject || ""}<br>
                   <Button
                     onClick={handleSend}
                     disabled={isLoading || !toInput.trim() || !emailData.subject.trim()}
-                    className="rounded-xl px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md shadow-blue-200"
+                    className="rounded-xl px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md blue-200"
                   >
                     {isLoading ? (
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />

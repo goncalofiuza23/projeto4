@@ -106,7 +106,7 @@ export function KanbanBoard() {
         if (data?.collapsed_columns) {
           setCollapsedColumns(data.collapsed_columns);
         }
-      });
+      }, null);
       setIsInitialLoad(false);
     };
 
@@ -127,7 +127,7 @@ export function KanbanBoard() {
           collapsed_columns: newState,
           updated_at: new Date().toISOString(),
         });
-      });
+      }, null);
     }
   };
 
@@ -230,7 +230,7 @@ export function KanbanBoard() {
             ...updates,
           });
         }
-      });
+      }, null);
 
       setEmailsMetadata((prev) => ({
         ...prev,
@@ -480,9 +480,9 @@ export function KanbanBoard() {
       const colThreads = getThreadsByColumn(colId);
 
       return (
-        <div className="max-w-3xl mx-auto py-4">
-          <div className="flex items-center gap-4 mb-8 pb-6 border-b border-slate-200/50">
-            <div className="h-14 w-14 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-2xl">
+        <div className="max-w-3xl mx-auto py-4 pt-8">
+          <div className="flex items-center gap-4 mb-8 bg-white/80 backdrop-blur-md rounded-2xl p-4 shadow-sm border border-slate-200/50">
+            <div className="h-14 w-14 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center text-2xl">
               {column?.icon || "📁"}
             </div>
             <div>
@@ -500,7 +500,7 @@ export function KanbanBoard() {
 
           <div className="space-y-4">
             {colThreads.length === 0 ? (
-              <div className="text-center py-16 text-slate-400 bg-white/50 rounded-3xl border border-dashed border-slate-200 shadow-sm">
+              <div className="text-center py-16 text-slate-400 bg-white/80 backdrop-blur-md rounded-3xl border border-dashed border-slate-200 shadow-sm">
                 {t("empty_col")}
               </div>
             ) : (
@@ -534,9 +534,9 @@ export function KanbanBoard() {
       );
 
       return (
-        <div className="max-w-3xl mx-auto py-4">
-          <div className="flex items-center gap-4 mb-8 pb-6 border-b border-slate-200/50">
-            <div className="h-14 w-14 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-2xl text-indigo-500">
+        <div className="max-w-3xl mx-auto py-4 pt-8">
+          <div className="flex items-center gap-4 mb-8 bg-white/80 backdrop-blur-md rounded-2xl p-4 shadow-sm border border-slate-200/50">
+            <div className="h-14 w-14 bg-indigo-50 rounded-xl shadow-sm border border-indigo-100 flex items-center justify-center text-2xl text-indigo-500">
               <Clock className="h-6 w-6" />
             </div>
             <div>
@@ -554,7 +554,7 @@ export function KanbanBoard() {
 
           <div className="space-y-4">
             {snoozedThreads.length === 0 ? (
-              <div className="text-center py-16 text-slate-400 bg-white/50 rounded-3xl border border-dashed border-slate-200 shadow-sm">
+              <div className="text-center py-16 text-slate-400 bg-white/80 backdrop-blur-md rounded-3xl border border-dashed border-slate-200 shadow-sm">
                 {t("empty_snoozed")}
               </div>
             ) : (
@@ -585,9 +585,9 @@ export function KanbanBoard() {
       );
 
       return (
-        <div className="max-w-3xl mx-auto py-4">
-          <div className="flex items-center gap-4 mb-8 pb-6 border-b border-slate-200/50">
-            <div className="h-14 w-14 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-2xl">
+        <div className="max-w-3xl mx-auto py-4 pt-8">
+          <div className="flex items-center gap-4 mb-8 bg-white/80 backdrop-blur-md rounded-2xl p-4 shadow-sm border border-slate-200/50">
+            <div className="h-14 w-14 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center text-2xl">
               📦
             </div>
             <div>
@@ -605,7 +605,7 @@ export function KanbanBoard() {
 
           <div className="space-y-4">
             {archivedThreads.length === 0 ? (
-              <div className="text-center py-16 text-slate-400 bg-white/50 rounded-3xl border border-dashed border-slate-200 shadow-sm">
+              <div className="text-center py-16 text-slate-400 bg-white/80 backdrop-blur-md rounded-3xl border border-dashed border-slate-200 shadow-sm">
                 {t("empty_archived")}
               </div>
             ) : (
@@ -636,9 +636,9 @@ export function KanbanBoard() {
       );
 
       return (
-        <div className="max-w-3xl mx-auto py-4">
-          <div className="flex items-center gap-4 mb-8 pb-6 border-b border-slate-200/50">
-            <div className="h-14 w-14 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-2xl">
+        <div className="max-w-3xl mx-auto py-4 pt-8">
+          <div className="flex items-center gap-4 mb-8 bg-white/80 backdrop-blur-md rounded-2xl p-4 shadow-sm border border-slate-200/50">
+            <div className="h-14 w-14 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center text-2xl">
               📤
             </div>
             <div>
@@ -656,7 +656,7 @@ export function KanbanBoard() {
 
           <div className="space-y-4">
             {sentThreads.length === 0 ? (
-              <div className="text-center py-16 text-slate-400 bg-white/50 rounded-3xl border border-dashed border-slate-200 shadow-sm">
+              <div className="text-center py-16 text-slate-400 bg-white/80 backdrop-blur-md rounded-3xl border border-dashed border-slate-200 shadow-sm">
                 {t("empty_sent")}
               </div>
             ) : (
@@ -686,9 +686,9 @@ export function KanbanBoard() {
       );
 
       return (
-        <div className="max-w-3xl mx-auto py-4">
-          <div className="flex items-center gap-4 mb-8 pb-6 border-b border-slate-200/50">
-            <div className="h-14 w-14 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-2xl text-red-500">
+        <div className="max-w-3xl mx-auto py-4 pt-8">
+          <div className="flex items-center gap-4 mb-8 bg-white/80 backdrop-blur-md rounded-2xl p-4 shadow-sm border border-slate-200/50">
+            <div className="h-14 w-14 bg-red-50 rounded-xl shadow-sm border border-red-100 flex items-center justify-center text-2xl text-red-500">
               <Trash2 className="h-6 w-6" />
             </div>
             <div>
@@ -706,7 +706,7 @@ export function KanbanBoard() {
 
           <div className="space-y-4">
             {deletedThreads.length === 0 ? (
-              <div className="text-center py-16 text-slate-400 bg-white/50 rounded-3xl border border-dashed border-slate-200 shadow-sm">
+              <div className="text-center py-16 text-slate-400 bg-white/80 backdrop-blur-md rounded-3xl border border-dashed border-slate-200 shadow-sm">
                 {t("empty_deleted")}
               </div>
             ) : (
@@ -737,9 +737,9 @@ export function KanbanBoard() {
       );
 
       return (
-        <div className="max-w-3xl mx-auto py-4">
-          <div className="flex items-center gap-4 mb-8 pb-6 border-b border-slate-200/50">
-            <div className="h-14 w-14 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-2xl text-amber-500">
+        <div className="max-w-3xl mx-auto py-4 pt-8">
+          <div className="flex items-center gap-4 mb-8 bg-white/80 backdrop-blur-md rounded-2xl p-4 shadow-sm border border-slate-200/50">
+            <div className="h-14 w-14 bg-amber-50 rounded-xl shadow-sm border border-amber-100 flex items-center justify-center text-2xl text-amber-500">
               <AlertOctagon className="h-6 w-6" />
             </div>
             <div>
@@ -757,7 +757,7 @@ export function KanbanBoard() {
 
           <div className="space-y-4">
             {spamThreads.length === 0 ? (
-              <div className="text-center py-16 text-slate-400 bg-white/50 rounded-3xl border border-dashed border-slate-200 shadow-sm">
+              <div className="text-center py-16 text-slate-400 bg-white/80 backdrop-blur-md rounded-3xl border border-dashed border-slate-200 shadow-sm">
                 {t("empty_spam")}
               </div>
             ) : (
@@ -783,7 +783,7 @@ export function KanbanBoard() {
     }
 
     return (
-      <div className="flex flex-col items-center justify-center h-[70vh] text-slate-400 space-y-4">
+      <div className="flex flex-col items-center justify-center h-[70vh] text-slate-400 space-y-4 bg-white/50 backdrop-blur-sm rounded-3xl m-8">
         <Clock className="h-12 w-12 text-slate-300" />
         <p className="font-medium text-lg">
           {t("view_construction_1")} <b>{activeView}</b> {t("view_construction_2")}

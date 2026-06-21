@@ -47,7 +47,7 @@ function BackofficeContent() {
         } else {
           setIsAdmin(false);
         }
-      });
+      }, null);
     };
 
     checkAdmin();
@@ -61,7 +61,7 @@ function BackofficeContent() {
         .order("last_active", { ascending: false });
 
       if (data) setUsers(data);
-    });
+    }, null);
     setLoadingData(false);
   };
 
@@ -116,7 +116,6 @@ function BackofficeContent() {
     <div className="min-h-screen bg-slate-50 text-slate-900 p-8 font-sans">
       <div className="max-w-6xl mx-auto space-y-8">
         
-        {/* Cabeçalho Limpo */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
@@ -130,7 +129,6 @@ function BackofficeContent() {
           </Button>
         </div>
 
-        {/* Métricas Principais */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card className="bg-white border-slate-200 shadow-sm rounded-2xl overflow-hidden">
             <CardContent className="p-6">
@@ -157,7 +155,6 @@ function BackofficeContent() {
           </Card>
         </div>
 
-        {/* Tabela Branca e Limpa */}
         <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
           <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-white">
             <h2 className="text-base font-bold text-slate-800">{t("registered_users")}</h2>

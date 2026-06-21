@@ -23,7 +23,6 @@ import { Clock, Paperclip, Settings, Send } from "lucide-react";
 import type { Email } from "@/lib/microsoft-graph";
 import type { EmailMetadata } from "@/lib/supabase";
 import { EmailViewer } from "./email-viewer";
-import { GraphService } from "@/lib/microsoft-graph";
 import { useState } from "react";
 import { useLanguage } from "./language-provider";
 
@@ -56,7 +55,7 @@ export function EmailCard({
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newTag, setNewTag] = useState("");
-  const [priority, setPriority] = useState(metadata?.priority || "media");
+  const [priority, setPriority] = useState<EmailMetadata["priority"]>(metadata?.priority || "media");
   const [tags, setTags] = useState(metadata?.tags || []);
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
 
@@ -94,8 +93,8 @@ export function EmailCard({
     );
   };
 
-  const graphService = new GraphService("");
-  const isEmailSent = graphService.isEmailInSentFolder(email);
+  // 👇 Correção: Verifica diretamente nas propriedades do Email em vez de usar o GraphService vazio
+  const isEmailSent = email.folderType === "sent" || (email as any).isFromMe;
 
   return (
     <div>
@@ -217,7 +216,7 @@ export function EmailCard({
             </div>
 
             <div className="flex items-center gap-1">
-              <span className="text-xs">{priorityIcons[priority]}</span>
+              <span className="text-xs">{priorityIcons[priority as keyof typeof priorityIcons]}</span>
             </div>
           </div>
 

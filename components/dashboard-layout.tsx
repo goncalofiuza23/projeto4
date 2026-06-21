@@ -127,7 +127,7 @@ export function DashboardLayout({
           if (savedBg) setCurrentBg(savedBg);
           setIsSidebarCollapsed(data.is_sidebar_collapsed);
         }
-      });
+      }, null);
       setIsInitialLoad(false);
     };
 
@@ -144,7 +144,7 @@ export function DashboardLayout({
         ...updates,
         updated_at: new Date().toISOString(),
       });
-    });
+    }, null);
   };
 
   const handleBgChange = (val: string) => {

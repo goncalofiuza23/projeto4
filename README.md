@@ -1,144 +1,117 @@
-# Outlook Kanban - Gerenciador de Conversas
+# Outlook Kanban - Plataforma de Produtividade
 
-Um sistema Kanban para gerenciar conversas de email do Outlook/Microsoft 365 com funcionalidades avançadas.
+Um sistema web desenvolvido em Next.js que transforma a caixa de entrada tradicional do Microsoft Outlook num quadro Kanban interativo, focado na máxima produtividade e organização.
 
-## 🚀 Funcionalidades
+## 🚀 Funcionalidades Principais
 
-### ✅ Funcionalidades Básicas (Sem Supabase)
-- ✅ Login com Microsoft 365
-- ✅ Visualização de conversas em formato Kanban
-- ✅ Agrupamento automático de emails relacionados (threads)
-- ✅ Drag & drop entre colunas
-- ✅ Visualização detalhada de emails
-- ✅ Responder, encaminhar e compor emails
-- ✅ Filtros básicos (busca, remetente, assunto, anexos, leitura, data)
+### 📋 Gestão Kanban & Produtividade
+- **Quadro Interativo:** Visualização de conversas (threads) em formato Kanban com drag & drop.
+- **Colunas Personalizadas:** Criação e gestão de colunas com ícones e cores próprias.
+- **Snooze (Adiar):** Capacidade de esconder emails temporariamente (adiar para o dia seguinte).
+- **Tags e Prioridades:** Classificação de conversas com etiquetas de cor e 4 níveis de prioridade.
+- **Vistas Inteligentes:** Acesso rápido a Enviados, Arquivados, Adiados, Spam e Eliminados.
 
-### 🔧 Funcionalidades Avançadas (Com Supabase)
-- 🔧 Colunas personalizadas
-- 🔧 Tags e prioridades por conversa
-- 🔧 Filtros avançados por tags/prioridade
-- 🔧 Persistência de configurações
+### 📧 Comunicação Avançada
+- **Editor Rich Text:** Compositor de e-mails completo com formatação avançada de texto, cores e listas.
+- **Gestão de Assinaturas:** Criação, edição e inserção rápida de múltiplas assinaturas personalizadas (com suporte a imagens).
+- **Autocomplete Inteligente:** Sugestão automática de contactos baseada no histórico local e na API da Microsoft.
+- **Gestão de Anexos:** Suporte nativo para leitura, envio e remoção de anexos.
+- **Ações Rápidas:** Responder, Responder a Todos, Reencaminhar e Mover diretamente do compositor.
+
+### ⚙️ Personalização & Administração
+- **Painel de Administração (Backoffice):** Área reservada para administradores com métricas de utilização e monitorização de contas ativas em tempo real.
+- **Definições Visuais:** Personalização do fundo da plataforma (cores sólidas e imagens) e menu lateral colapsável.
+- **Multi-idioma:** Suporte integrado para alternar entre Português e Inglês.
+- **Sincronização Híbrida:** Utiliza a API Microsoft Graph para os emails pesados e o Supabase para configurações leves e rápidas.
+
+---
 
 ## 📋 Pré-requisitos
 
-1. **Microsoft Azure App Registration** (Obrigatório)
-2. **Supabase Project** (Opcional - para funcionalidades avançadas)
+1. **Microsoft Azure App Registration** (Para autenticação SSO e leitura de e-mails)
+2. **Supabase Project** (Base de dados PostgreSQL para metadados, permissões e definições)
+3. **Node.js** (Versão 18+ recomendada)
 
-## 🛠️ Configuração
+---
 
-### 1. Clone o repositório
-\`\`\`bash
+## 🛠️ Configuração e Instalação
+
+### 1. Clonar o repositório
+```bash
 git clone <repository-url>
 cd outlook-kanban
 npm install
-\`\`\`
+```
 
-### 2. Configure as variáveis de ambiente
-\`\`\`bash
-cp .env.example .env.local
-\`\`\`
+### 2. Configurar as Variáveis de Ambiente
+Crie um ficheiro `.env.local` na raiz do projeto:
+```env
+# Autenticação Microsoft
+NEXT_PUBLIC_MICROSOFT_CLIENT_ID=seu_microsoft_client_id
 
-Edite `.env.local`:
-\`\`\`env
-# Obrigatório
-NEXT_PUBLIC_MICROSOFT_CLIENT_ID=your_microsoft_client_id
+# Base de Dados (Supabase)
+NEXT_PUBLIC_SUPABASE_URL=seu_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sua_supabase_anon_key
+```
 
-# Opcional (para funcionalidades avançadas)
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-\`\`\`
+### 3. Configurar o Azure App Registration
+1. Aceda ao [Azure Portal](https://portal.azure.com).
+2. Navegue para "Microsoft Entra ID" > "App registrations" > "New registration".
+3. Configure o **Redirect URI** como `Single-page application` apontando para `http://localhost:3000`.
+4. Em "API permissions", adicione e conceda consentimento para:
+   - `Mail.ReadWrite`
+   - `Mail.Send`
+   - `User.Read`
+   - `People.Read` (Para o autocomplete de contactos)
 
-### 3. Configure o Azure App Registration
+### 4. Configurar a Base de Dados (Supabase)
+Crie as seguintes tabelas no seu projeto Supabase para garantir o funcionamento total:
+- `user_stats` (Registo de utilizadores, datas de acesso e permissões `is_admin`).
+- `user_preferences` (Temas, estado da barra lateral, assinaturas de e-mail).
+- `email_metadata` (Tags, colunas, prioridades e datas de snooze ligadas ao ID do e-mail).
+- `custom_columns` (Definição visual das colunas criadas pelo utilizador).
 
-1. Acesse [Azure Portal](https://portal.azure.com)
-2. Vá para "Azure Active Directory" > "App registrations"
-3. Clique em "New registration"
-4. Configure:
-   - **Name**: Outlook Kanban
-   - **Supported account types**: Accounts in any organizational directory and personal Microsoft accounts
-   - **Redirect URI**: `http://localhost:3000` (para desenvolvimento)
-
-5. Após criar, vá para "Authentication":
-   - Marque "Access tokens" e "ID tokens"
-   - Adicione `http://localhost:3000` em "Single-page application"
-
-6. Vá para "API permissions":
-   - Adicione as permissões:
-     - `Mail.ReadWrite`
-     - `Mail.Send`
-     - `User.Read`
-
-7. Copie o "Application (client) ID" para `NEXT_PUBLIC_MICROSOFT_CLIENT_ID`
-
-### 4. Configure o Supabase (Opcional)
-
-Se você quiser as funcionalidades avançadas:
-
-1. Crie um projeto no [Supabase](https://supabase.com)
-2. Execute os scripts SQL em `scripts/`:
-   - `create-custom-columns.sql`
-   - `create-tables.sql`
-3. Configure as variáveis `NEXT_PUBLIC_SUPABASE_URL` e `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-
-### 5. Execute o projeto
-\`\`\`bash
+### 5. Executar o Projeto
+```bash
 npm run dev
-\`\`\`
+```
+Abra [http://localhost:3000](http://localhost:3000) no seu navegador.
 
-## 🎯 Como Usar
-
-### Modo Básico (Sem Supabase)
-1. Faça login com sua conta Microsoft
-2. Visualize suas conversas na coluna Caixa de Entrada
-3. Use drag & drop para mover conversas entre colunas
-4. Use os filtros básicos para encontrar conversas
-5. Clique nas conversas para expandir e ver todos os emails
-6. Use os botões para responder, encaminhar ou compor novos emails
-
-### Modo Avançado (Com Supabase)
-1. Todas as funcionalidades básicas +
-2. Crie colunas personalizadas
-3. Adicione tags e defina prioridades para conversas inteiras
-4. Use filtros avançados por tags/prioridade
-5. Configurações persistem entre sessões
-
-## 🔧 Troubleshooting
-
-### Erro: "supabaseUrl is required"
-- **Causa**: Variáveis do Supabase não configuradas
-- **Solução**: Configure as variáveis ou use apenas o modo básico
-
-### Erro: "user_cancelled"
-- **Causa**: Usuário cancelou o login (comportamento normal)
-- **Solução**: Tente fazer login novamente
-
-### Erro: "Unauthorized" ou "403"
-- **Causa**: Permissões insuficientes no Azure
-- **Solução**: Verifique as permissões da API no Azure Portal
-
-### Popup bloqueado
-- **Causa**: Navegador bloqueou popup de login
-- **Solução**: Permita popups para o site
+---
 
 ## 📁 Estrutura do Projeto
 
-\`\`\`
+O projeto segue a arquitetura moderna do Next.js (App Router):
+
+```text
 outlook-kanban/
-├── components/           # Componentes React
-├── lib/                 # Utilitários e configurações
-├── scripts/             # Scripts SQL do Supabase
-├── app/                 # Páginas Next.js
-└── .env.example         # Exemplo de variáveis de ambiente
-\`\`\`
+├── app/                  # Roteamento e Páginas Principais
+│   ├── admin/            # Painel de Administração (Backoffice protegido)
+│   ├── layout.tsx        # Layout Global e Providers
+│   └── page.tsx          # Dashboard Principal (Kanban)
+├── components/           # Componentes React Reutilizáveis UI e Lógica
+├── hooks/                # Custom Hooks (ex: gestão de Toasts)
+├── lib/                  # Serviços Externos
+│   ├── microsoft-graph.ts  # Comunicação com a MS Graph API
+│   └── supabase.ts         # Configuração e tipagem estrita do Supabase
+└── public/               # Ficheiros estáticos (imagens, ícones)
+```
 
-## 🤝 Contribuindo
+---
 
-1. Fork o projeto
-2. Crie uma branch para sua feature
-3. Commit suas mudanças
-4. Push para a branch
-5. Abra um Pull Request
+## 🔧 Resolução de Problemas (Troubleshooting)
 
-## 📄 Licença
+### Acesso Negado no Painel de Administração
+- **Causa:** O seu e-mail não tem o cargo de administrador na base de dados.
+- **Solução:** Na página de erro "Área Reservada", verifique a "Caixa de Diagnóstico" para confirmar o seu ID/E-mail exato enviado pela Microsoft. Vá ao Supabase, tabela `user_stats`, localize a sua linha e altere a coluna `is_admin` para `true`.
 
-Este projeto está sob a licença MIT.
+### E-mails não carregam ou demoram muito
+- **Causa:** O token de acesso da Microsoft pode ter expirado ou o limite de paginação foi atingido.
+- **Solução:** Utilize o botão de recarregar no topo da plataforma ou faça logout e login novamente para renovar o token SSO silenciosamente.
+
+---
+
+## 📄 Licença e Autoria
+
+Projeto desenvolvido no âmbito académico no Instituto Politécnico de Viana do Castelo (IPVC).  
+**Autor:** Gonçalo Fiúza, Daniel Gonçalves
