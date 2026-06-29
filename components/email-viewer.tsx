@@ -94,8 +94,6 @@ export function EmailViewer({
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingTaskText, setEditingTaskText] = useState("");
   const [isTasksOpen, setIsTasksOpen] = useState(false);
-  
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
     if (metadata?.subtasks) {
@@ -176,7 +174,6 @@ export function EmailViewer({
   };
 
   const handleDelete = async () => {
-    setIsDeleteDialogOpen(false);
     if (!accessToken || !email.id) return;
 
     try {
@@ -479,6 +476,7 @@ export function EmailViewer({
                     </div>
                   </div>
 
+                  {/* PARA (TO) */}
                   {fullEmail?.toRecipients && fullEmail.toRecipients.length > 0 && (
                     <div className="flex items-start gap-2 ml-10">
                       <Users className="h-3.5 w-3.5 text-slate-400 mt-0.5 shrink-0" />
@@ -487,6 +485,27 @@ export function EmailViewer({
                           {t("to_label_caps")}
                         </span>
                         {fullEmail.toRecipients.map((recipient, index) => (
+                          <span
+                            key={index}
+                            className="text-xs text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100"
+                          >
+                            {recipient.emailAddress.name || recipient.emailAddress.address}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* CC (COM CONHECIMENTO) */}
+                  {fullEmail?.ccRecipients && fullEmail.ccRecipients.length > 0 && (
+                    <div className="flex items-start gap-2 ml-10 mt-0.5">
+                      {/* Espaço em branco com o exato tamanho do ícone Users para alinhar perfeitamente */}
+                      <div className="w-3.5 shrink-0" />
+                      <div className="flex-1 flex flex-wrap gap-1">
+                        <span className="text-slate-400 text-xs font-semibold mr-1 mt-0.5 uppercase tracking-wider">
+                          {t("cc_label")}:
+                        </span>
+                        {fullEmail.ccRecipients.map((recipient, index) => (
                           <span
                             key={index}
                             className="text-xs text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100"
@@ -631,7 +650,7 @@ export function EmailViewer({
                     <Button
                       variant="ghost"
                       className="rounded-xl text-red-600 hover:bg-red-50 font-medium"
-                      onClick={() => setIsDeleteDialogOpen(true)}
+                      onClick={handleDelete}
                     >
                       <Trash2 className="h-4 w-4 mr-2" />
                       {t("delete_btn")}
@@ -807,35 +826,6 @@ export function EmailViewer({
               </div>
             )}
           </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="max-w-sm rounded-2xl" onPointerDown={(e) => e.stopPropagation()}>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <AlertTriangle className="h-5 w-5" /> {t("delete_email_title")}
-            </DialogTitle>
-            <DialogDescription className="text-slate-500 pt-2">
-              {t("delete_email_desc")}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex gap-2 sm:justify-end mt-4">
-            <Button
-              variant="outline"
-              onClick={() => setIsDeleteDialogOpen(false)}
-              className="rounded-xl h-10 px-6"
-            >
-              {t("cancel_btn")}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDelete}
-              className="rounded-xl h-10 px-6"
-            >
-              {t("delete_btn")}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 

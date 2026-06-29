@@ -10,7 +10,7 @@ const translations = {
     hero_title_1: "Os seus e-mails,",
     hero_title_2: "organizados no quadro.",
     hero_subtitle: "Uma interface visual ligada diretamente ao seu Outlook. Ideal para estudantes e profissionais que precisam de gerir mensagens como tarefas reais.",
-    feature_1: "Colunas personalizadas para organization rápida.",
+    feature_1: "Colunas personalizadas para organização rápida.",
     feature_2: "Função Snooze para adiar conversas para mais tarde.",
     feature_3: "Privacidade total: não guardamos os seus e-mails.",
     login_ms: "Entrar com a Microsoft",
@@ -285,14 +285,10 @@ const translations = {
     delete_forever: "Eliminar para Sempre",
     delete_normal: "Eliminar",
     delete_success_forever: "Eliminado Definitivamente",
-    delete_desc_forever: "A conversa foi removida permanentemente.",
     delete_success: "Eliminado",
     delete_desc: "Conversa movida para os Itens Eliminados.",
     delete_error_forever: "Falha ao eliminar definitivamente",
     delete_error: "Falha ao eliminar e-mail",
-    delete_modal_title: "Eliminar E-mail",
-    delete_modal_desc_forever: "Esta ação irá apagar a conversa permanentemente. Não poderá ser recuperada.",
-    delete_modal_desc: "Tem a certeza de que pretende eliminar esta conversa? Esta ação moverá os e-mails para a pasta de Itens Eliminados.",
     manage_tags_deadlines: "Gerir Prazos e Tags",
     archive_btn: "Arquivar",
     due_date_label: "Data Limite (Prazo)",
@@ -333,11 +329,9 @@ const translations = {
     click_to_add: "Clique abaixo para adicionar.",
     task_placeholder: "Descreva a tarefa...",
     new_task: "Nova Tarefa",
-    delete_email_desc: "Tem a certeza de que pretende eliminar esta mensagem? Esta ação moverá o e-mail para a pasta de Itens Eliminados.",
     content_unavailable: "Conteúdo não disponível",
     delete_btn: "Eliminar",
     close_btn: "Fechar",
-    delete_email_title: "Eliminar E-mail",
 
     // Backoffice / Admin
     checking_creds: "A verificar credenciais...",
@@ -359,7 +353,6 @@ const translations = {
     online_now: "Online Agora",
     offline: "Offline",
   },
-
 
   en: {
     // Página Inicial
@@ -643,14 +636,10 @@ const translations = {
     delete_forever: "Delete Forever",
     delete_normal: "Delete",
     delete_success_forever: "Permanently Deleted",
-    delete_desc_forever: "The conversation has been permanently removed.",
     delete_success: "Deleted",
     delete_desc: "Conversation moved to Deleted Items.",
     delete_error_forever: "Failed to permanently delete",
     delete_error: "Failed to delete email",
-    delete_modal_title: "Delete Email",
-    delete_modal_desc_forever: "This action will permanently delete the conversation. It cannot be recovered.",
-    delete_modal_desc: "Are you sure you want to delete this conversation? This will move the emails to the Deleted Items folder.",
     manage_tags_deadlines: "Manage Deadlines and Tags",
     archive_btn: "Archive",
     due_date_label: "Due Date",
@@ -691,11 +680,9 @@ const translations = {
     click_to_add: "Click below to add.",
     task_placeholder: "Describe the task...",
     new_task: "New Task",
-    delete_email_desc: "Are you sure you want to delete this message? This action will move the email to the Deleted Items folder.",
     content_unavailable: "Content not available",
     delete_btn: "Delete",
     close_btn: "Close",
-    delete_email_title: "Delete Email",
 
     // Backoffice / Admin
     checking_creds: "Checking credentials...",

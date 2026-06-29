@@ -100,7 +100,6 @@ export const EmailThreadCard = memo(function EmailThreadCard({
   const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSnoozeModalOpen, setIsSnoozeModalOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [customSnoozeDate, setCustomSnoozeDate] = useState("");
 
   const [newTag, setNewTag] = useState("");
@@ -446,12 +445,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
     }
   };
 
-  const confirmDelete = () => {
-    setIsDeleteDialogOpen(true);
-  };
-
   const executeDelete = async () => {
-    setIsDeleteDialogOpen(false);
     if (!accessToken) return;
     setIsMoving(true);
     setIsVisuallyHidden(true);
@@ -463,7 +457,6 @@ export const EmailThreadCard = memo(function EmailThreadCard({
         );
         toast({
           title: t("delete_success_forever"),
-          description: t("delete_desc_forever"),
         });
       } else {
         await Promise.all(
@@ -501,10 +494,10 @@ export const EmailThreadCard = memo(function EmailThreadCard({
   return (
     <>
       <Card
-        className={`mb-2 bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 border-l-4 group relative flex flex-col ${
+        className={`mb-2 rounded-xl shadow-sm transition-all duration-300 ease-out border-l-4 group relative flex flex-col hover:-translate-y-0.5 hover:scale-[1.01] hover:shadow-lg ${
           isUnread
-            ? "border-l-blue-600 ring-1 ring-blue-100"
-            : "hover:border-l-blue-400 border-l-transparent border border-slate-200"
+            ? "bg-blue-50/70 border-l-blue-600 border-y border-r border-blue-200 ring-1 ring-blue-100"
+            : "bg-white hover:bg-slate-50 hover:border-l-blue-400 border-l-transparent border-y border-r border-slate-200"
         } ${isMoving ? "opacity-50 pointer-events-none" : ""}`}
       >
         <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
@@ -561,7 +554,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
 
                       <DropdownMenuSeparator className="bg-slate-100" />
                       <DropdownMenuItem
-                        onClick={confirmDelete}
+                        onClick={executeDelete}
                         className="cursor-pointer py-2 rounded-lg font-medium text-red-600 focus:text-red-700 focus:bg-red-50"
                       >
                         <Trash2 className="mr-2 h-4 w-4" />
@@ -605,7 +598,7 @@ export const EmailThreadCard = memo(function EmailThreadCard({
                         {t("spam_mark")}
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        onClick={confirmDelete}
+                        onClick={executeDelete}
                         className="cursor-pointer py-2 rounded-lg text-red-600 focus:text-red-700 focus:bg-red-50"
                       >
                         <Trash2 className="mr-2 h-4 w-4" />
@@ -927,37 +920,6 @@ export const EmailThreadCard = memo(function EmailThreadCard({
               </div>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="max-w-sm rounded-2xl" onPointerDown={(e) => e.stopPropagation()}>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-red-600">
-              <AlertTriangle className="h-5 w-5" /> {t("delete_modal_title")}
-            </DialogTitle>
-            <DialogDescription className="text-slate-500 pt-2">
-              {isDeletedView
-                ? t("delete_modal_desc_forever")
-                : t("delete_modal_desc")}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex gap-2 sm:justify-end mt-4">
-            <Button
-              variant="outline"
-              onClick={() => setIsDeleteDialogOpen(false)}
-              className="rounded-xl h-10 px-6"
-            >
-              {t("cancel_btn")}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={executeDelete}
-              className="rounded-xl h-10 px-6"
-            >
-              {t("delete_normal")}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
