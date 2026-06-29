@@ -148,59 +148,97 @@ export function KanbanBoard() {
   };
 
   const loadEmails = async (isBackground = false, currentLimit = emailLimit) => {
-    if (!accessToken || !account) return;
+  if (!accessToken || !account) return;
 
+  if (!isBackground) {
+    setIsLoading(true);
+  }
+
+  try {
+    const graphService = new GraphService(accessToken);
+    
+    const fetchedEmailsPromise = graphService.getAllEmails(currentLimit);
+
+    let metadataPromise = Promise.resolve(null as any);
+    if (isSupabaseAvailable()) {
+      metadataPromise = safeSupabaseOperation(async () => {
+        const { data, error } = await supabase!
+          .from("email_metadata")
+          .select("*")
+          .eq("user_id", account.homeAccountId);
+        if (error) throw error;
+        return data;
+      }, []);
+    }
+
+    const [fetchedEmails, metadata] = await Promise.all([
+      fetchedEmailsPromise,
+      metadataPromise
+    ]);
+
+    const metadataMap: Record<string, EmailMetadata> = {};
+    const allTags = new Set<string>();
+
+    if (metadata) {
+      metadata.forEach((meta: any) => {
+        metadataMap[meta.email_id] = meta;
+        meta.tags?.forEach((tag: string) => allTags.add(tag));
+      });
+      setAvailableTags(Array.from(allTags));
+    }
+
+    const fetchedEmailIds = new Set(fetchedEmails.map((email) => email.id));
+
+    const missingMetadataEmails =
+      metadata?.filter((meta: EmailMetadata) => {
+        if (fetchedEmailIds.has(meta.email_id)) return false;
+
+        const hasUsefulMetadata =
+          meta.column_id ||
+          meta.snoozed_until ||
+          meta.due_date ||
+          (meta.tags && meta.tags.length > 0) ||
+          (meta.subtasks && meta.subtasks.length > 0) ||
+          meta.priority;
+
+        return hasUsefulMetadata;
+      }) || [];
+
+    const missingEmails = await Promise.all(
+      missingMetadataEmails.map(async (meta: EmailMetadata) => {
+        try {
+          return await graphService.getEmailById(meta.email_id);
+        } catch (error) {
+          console.warn("Não foi possível carregar email antigo:", meta.email_id);
+          return null;
+        }
+      })
+    );
+
+    const extraEmails = missingEmails.filter(Boolean) as Email[];
+
+    const allEmailsMap = new Map<string, Email>();
+
+    [...fetchedEmails, ...extraEmails].forEach((email) => {
+      allEmailsMap.set(email.id, email);
+    });
+
+    const allEmails = Array.from(allEmailsMap.values());
+
+    const emailThreads = graphService.groupEmailsIntoThreads(allEmails);
+
+    setEmails(allEmails);
+    setThreads(emailThreads);
+    setEmailsMetadata(metadataMap);
+
+  } catch (e) {
+    if (!isBackground) setError("Erro ao carregar");
+  } finally {
     if (!isBackground) {
-      setIsLoading(true);
+      setIsLoading(false);
     }
-
-    try {
-      const graphService = new GraphService(accessToken);
-      
-      const fetchedEmailsPromise = graphService.getAllEmails(currentLimit);
-
-      let metadataPromise = Promise.resolve(null as any);
-      if (isSupabaseAvailable()) {
-        metadataPromise = safeSupabaseOperation(async () => {
-          const { data, error } = await supabase!
-            .from("email_metadata")
-            .select("*")
-            .eq("user_id", account.homeAccountId);
-          if (error) throw error;
-          return data;
-        }, []);
-      }
-
-      const [fetchedEmails, metadata] = await Promise.all([
-        fetchedEmailsPromise,
-        metadataPromise
-      ]);
-
-      const metadataMap: Record<string, EmailMetadata> = {};
-      const allTags = new Set<string>();
-
-      if (metadata) {
-        metadata.forEach((meta: any) => {
-          metadataMap[meta.email_id] = meta;
-          meta.tags?.forEach((tag: string) => allTags.add(tag));
-        });
-        setAvailableTags(Array.from(allTags));
-      }
-
-      const emailThreads = graphService.groupEmailsIntoThreads(fetchedEmails);
-
-      setEmails(fetchedEmails);
-      setThreads(emailThreads);
-      setEmailsMetadata(metadataMap);
-
-    } catch (e) {
-      if (!isBackground) setError("Erro ao carregar");
-    } finally {
-      if (!isBackground) {
-        setIsLoading(false);
-      }
-    }
-  };
+  }
+};
 
   const updateEmailMetadata = async (
     emailId: string,
