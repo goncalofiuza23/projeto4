@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -81,6 +82,7 @@ function AutocompleteEmailInput({
   accessToken: string | null,
   className?: string
 }) {
+  const { t } = useLanguage();
   const [suggestions, setSuggestions] = useState<ContactSuggestion[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -258,7 +260,7 @@ function AutocompleteEmailInput({
           {isLoading && suggestions.length === 0 ? (
             <div className="p-3 flex items-center justify-center gap-2 text-xs text-slate-400">
               <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
-              A carregar...
+              {t("loading_contacts")}
             </div>
           ) : suggestions.length > 0 ? (
             suggestions.map((s, i) => (
@@ -275,7 +277,7 @@ function AutocompleteEmailInput({
             ))
           ) : (
             <div className="p-3 text-center text-xs text-slate-400 font-medium">
-              Nenhum contacto encontrado.
+              {t("no_contacts")}
             </div>
           )}
         </div>
@@ -474,7 +476,6 @@ export function EmailComposer({
       : content.replace(/\n/g, "<br>");
     
     if (editorRef.current) {
-      // Inserir assinatura no local atual do cursor, ou no início
       editorRef.current.focus();
       document.execCommand("insertHTML", false, htmlContent);
       handleEditorInput();
@@ -506,7 +507,20 @@ export function EmailComposer({
           importance: "normal",
           attachments: [],
         });
-        if (editorRef.current) editorRef.current.innerHTML = "";
+        
+        let attempts = 0;
+        let clearTimer: NodeJS.Timeout;
+        const resetEditor = () => {
+          if (editorRef.current) {
+            editorRef.current.innerHTML = "";
+          } else if (attempts < 20) {
+            attempts++;
+            clearTimer = setTimeout(resetEditor, 50);
+          }
+        };
+        resetEditor();
+
+        return () => clearTimeout(clearTimer);
       }
       return;
     }
@@ -515,10 +529,14 @@ export function EmailComposer({
     let bodyContent = ""; 
     let originalBodyContent = originalEmail.body?.content || "";
 
-    // Evitar que tags de HTML do email original estraguem a formatação do compositor
-    const bodyMatch = originalBodyContent.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-    if (bodyMatch) {
-      originalBodyContent = bodyMatch[1];
+    if (originalEmail.body?.contentType === "html") {
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(originalBodyContent, "text/html");
+        originalBodyContent = doc.body.innerHTML;
+      } catch (e) {
+        console.error("DOMParser error", e);
+      }
     }
 
     if (originalEmail.body?.contentType === "html" && originalEmail.attachments && originalEmail.attachments.length > 0) {
@@ -550,18 +568,16 @@ export function EmailComposer({
     const ccNames = originalEmail.ccRecipients?.map(r => r.emailAddress.name || r.emailAddress.address).join("; ") || "";
     const ccLine = ccNames ? `<b>${t("history_cc")}</b> ${ccNames}<br>` : "";
 
-    // Bloco invisível no topo que força o espaço inicial
-    const spacer = `<div id="reply-start-point" style="min-height: 24px;"></div><br>`;
+    const spacer = `<div id="reply-start-point" style="min-height: 24px;"><br></div>`;
     
-    // Cabeçalho clássico do Outlook
     const historyHeader = `
-<div style="border-top:solid #E1E1E1 1.0pt; padding:3.0pt 0cm 0cm 0cm; margin-top:12.0pt;">
+<div style="border-top:solid #E1E1E1 1.0pt; padding:3.0pt 0cm 0cm 0cm; margin-top:12.0pt; margin-bottom:12.0pt;">
 <p style="margin:0cm; font-size:11.0pt; font-family:&quot;Calibri&quot;,sans-serif">
 <b>${t("history_from")}</b> ${fromName}<br>
 <b>${t("history_sent")}</b> ${dateStr}<br>
 <b>${t("history_to")}</b> ${toNames}<br>
 ${ccLine}<b>${t("history_subject")}</b> ${originalEmail.subject || ""}</p>
-</div><br>`;
+</div>`;
 
     switch (mode) {
       case "reply":
@@ -609,26 +625,41 @@ ${ccLine}<b>${t("history_subject")}</b> ${originalEmail.subject || ""}</p>
       },
     }));
     
-    if (editorRef.current) {
-      editorRef.current.innerHTML = bodyContent;
-      
-      // Forçar foco na primeira linha ao abrir
-      setTimeout(() => {
-        if (editorRef.current) {
-          editorRef.current.focus();
-          const el = editorRef.current;
-          const range = document.createRange();
-          const sel = window.getSelection();
-          
-          if (el.firstChild) {
-            range.setStartBefore(el.firstChild);
+    let attempts = 0;
+    let timerId: NodeJS.Timeout;
+
+    const injectContent = () => {
+      if (editorRef.current) {
+        editorRef.current.innerHTML = bodyContent;
+        
+        setTimeout(() => {
+          if (editorRef.current) {
+            editorRef.current.focus();
+            const startDiv = editorRef.current.querySelector('#reply-start-point');
+            
+            const selection = window.getSelection();
+            const range = document.createRange();
+            
+            if (startDiv) {
+              range.setStart(startDiv, 0);
+            } else {
+              range.setStart(editorRef.current, 0);
+            }
+            
             range.collapse(true);
-            sel?.removeAllRanges();
-            sel?.addRange(range);
+            selection?.removeAllRanges();
+            selection?.addRange(range);
           }
-        }
-      }, 50);
-    }
+        }, 50);
+      } else if (attempts < 20) {
+        attempts++;
+        timerId = setTimeout(injectContent, 50);
+      }
+    };
+
+    injectContent();
+
+    return () => clearTimeout(timerId);
   }, [isOpen, originalEmail, mode, t, language]);
 
   const parseEmailAddresses = (input: string) => {
