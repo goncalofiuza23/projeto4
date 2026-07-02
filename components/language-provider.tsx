@@ -44,6 +44,7 @@ const translations = {
     new_email: "Novo E-mail",
     menu_inbox_group: "Caixa de Entrada",
     menu_kanban: "O meu Kanban",
+    menu_calendar: "Calendário",
     menu_sent: "Enviados",
     menu_snoozed: "Adiados (Snooze)",
     menu_archived: "Arquivados",
@@ -78,6 +79,26 @@ const translations = {
     title_sent: "Enviados",
     title_deleted: "Eliminados",
     title_spam: "Lixo Eletrónico",
+
+    // Calendário
+    calendar_title: "Calendário de Tarefas",
+    calendar_all: "Todos",
+    calendar_snooze: "Snooze",
+    calendar_due_date: "Data Limite",
+    calendar_day_summary: "Resumo do dia",
+    calendar_emails: "emails",
+    calendar_snoozes: "snoozes",
+    calendar_due_dates: "prazos",
+    calendar_select_day: "Selecione um dia",
+    calendar_no_events: "Não há snoozes nem datas limite agendados para este dia.",
+    calendar_no_filtered_events: "Não há eventos deste tipo agendados para este dia.",
+    calendar_legend: "Legenda",
+    calendar_legend_snooze: "Snooze",
+    calendar_legend_due: "Data limite",
+    calendar_legend_both: "Ambos",
+    calendar_wakes_at: "Desperta às",
+    calendar_due_on: "Data limite",
+    calendar_showing: "A mostrar",
 
     // Definições
     settings_title: "Definições Gerais",
@@ -208,6 +229,20 @@ const translations = {
     history_to: "Para:",
     history_cc: "Cc:",
     history_subject: "Assunto:",
+
+    schedule_send: "Agendar envio",
+    schedule_send_for: "Agendar para",
+    send_now: "Enviar agora",
+    scheduled_for: "Agendado para",
+    clear_schedule: "Remover agendamento",
+    schedule_pick_date: "Escolher data e hora",
+    scheduled_success: "E-mail agendado! 🕒",
+    scheduled_success_desc: "Será enviado automaticamente a {date}",
+    scheduling_msg: "A agendar mensagem...",
+    schedule_invalid_title: "Data inválida",
+    schedule_invalid_desc: "Escolhe uma data e hora no futuro.",
+
+    filter_searching_outlook: "A procurar emails no Outlook...",
 
     // Painel de Filtros
     filter_show: "Mostrar Filtros",
@@ -430,6 +465,27 @@ const translations = {
     title_deleted: "Deleted Items",
     title_spam: "Junk Email",
 
+        // Calendar
+    menu_calendar: "Calendar",
+    calendar_title: "Task Calendar",
+    calendar_all: "All",
+    calendar_snooze: "Snooze",
+    calendar_due_date: "Due Date",
+    calendar_day_summary: "Day summary",
+    calendar_emails: "emails",
+    calendar_snoozes: "snoozes",
+    calendar_due_dates: "due dates",
+    calendar_select_day: "Select a day",
+    calendar_no_events: "There are no snoozes or due dates scheduled for this day.",
+    calendar_no_filtered_events: "There are no events of this type scheduled for this day.",
+    calendar_legend: "Legend",
+    calendar_legend_snooze: "Snooze",
+    calendar_legend_due: "Due date",
+    calendar_legend_both: "Both",
+    calendar_wakes_at: "Wakes at",
+    calendar_due_on: "Due date",
+    calendar_showing: "Showing",
+
     // Definições
     settings_title: "General Settings",
     settings_theme: "Dashboard Theme",
@@ -559,7 +615,21 @@ const translations = {
     history_to: "To:",
     history_cc: "Cc:",
     history_subject: "Subject:",
+    
+    schedule_send: "Schedule send",
+    schedule_send_for: "Schedule for",
+    send_now: "Send now",
+    scheduled_for: "Scheduled for",
+    clear_schedule: "Clear schedule",
+    schedule_pick_date: "Choose date and time",
+    scheduled_success: "Email scheduled! 🕒",
+    scheduled_success_desc: "It will be sent automatically on {date}",
+    scheduling_msg: "Scheduling message...",
+    schedule_invalid_title: "Invalid date",
+    schedule_invalid_desc: "Choose a future date and time.",
 
+    filter_searching_outlook: "Searching emails in Outlook...",
+    
     // Painel de Filtros
     filter_show: "Show Filters",
     filter_active_single: "active",

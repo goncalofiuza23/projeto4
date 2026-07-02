@@ -10,6 +10,7 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { KanbanColumn } from "./kanban-column";
+import { CalendarView } from "./calendar-view";
 import { EmailThreadCard } from "./email-thread-card";
 import { FiltersPanel, type EmailFilters } from "./filters-panel";
 import { DashboardLayout } from "./dashboard-layout";
@@ -29,7 +30,7 @@ import {
 } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Database, AlertOctagon, Trash2, Clock } from "lucide-react";
+import { Database, AlertOctagon, Trash2, Clock, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export function KanbanBoard() {
@@ -49,6 +50,8 @@ export function KanbanBoard() {
   const [emails, setEmails] = useState<Email[]>([]);
   const [threads, setThreads] = useState<EmailThread[]>([]);
   const [filteredThreads, setFilteredThreads] = useState<EmailThread[]>([]);
+  const [filterSearchThreads, setFilterSearchThreads] = useState<EmailThread[]>([]);
+  const [isSearchingFilters, setIsSearchingFilters] = useState(false);
   const [emailsMetadata, setEmailsMetadata] = useState<Record<string, EmailMetadata>>({});
   const [customColumns, setCustomColumns] = useState<CustomColumn[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -156,63 +159,63 @@ export function KanbanBoard() {
 
   try {
     const graphService = new GraphService(accessToken);
-    
+
     const fetchedEmailsPromise = graphService.getAllEmails(currentLimit);
 
-    let metadataPromise = Promise.resolve(null as any);
+    let metadataPromise = Promise.resolve([] as EmailMetadata[]);
+
     if (isSupabaseAvailable()) {
       metadataPromise = safeSupabaseOperation(async () => {
         const { data, error } = await supabase!
           .from("email_metadata")
           .select("*")
           .eq("user_id", account.homeAccountId);
+
         if (error) throw error;
-        return data;
+
+        return data || [];
       }, []);
     }
 
     const [fetchedEmails, metadata] = await Promise.all([
       fetchedEmailsPromise,
-      metadataPromise
+      metadataPromise,
     ]);
 
     const metadataMap: Record<string, EmailMetadata> = {};
     const allTags = new Set<string>();
 
-    if (metadata) {
-      metadata.forEach((meta: any) => {
-        metadataMap[meta.email_id] = meta;
-        meta.tags?.forEach((tag: string) => allTags.add(tag));
-      });
-      setAvailableTags(Array.from(allTags));
-    }
+    metadata.forEach((meta) => {
+      metadataMap[meta.email_id] = meta;
+      meta.tags?.forEach((tag: string) => allTags.add(tag));
+    });
+
+    setAvailableTags(Array.from(allTags));
 
     const fetchedEmailIds = new Set(fetchedEmails.map((email) => email.id));
 
-    const missingMetadataEmails =
-      metadata?.filter((meta: EmailMetadata) => {
-        if (fetchedEmailIds.has(meta.email_id)) return false;
+    const metadataEmailsToLoad = metadata.filter((meta) => {
+      if (fetchedEmailIds.has(meta.email_id)) return false;
 
-        const hasUsefulMetadata =
-          meta.column_id ||
-          meta.snoozed_until ||
-          meta.due_date ||
-          (meta.tags && meta.tags.length > 0) ||
-          (meta.subtasks && meta.subtasks.length > 0) ||
-          meta.priority;
+      const hasColumn = Boolean(meta.column_id);
+      const hasSnooze = Boolean(meta.snoozed_until);
+      const hasDueDate = Boolean(meta.due_date);
 
-        return hasUsefulMetadata;
-      }) || [];
+      return hasColumn || hasSnooze || hasDueDate;
+    });
 
     const missingEmails = await Promise.all(
-      missingMetadataEmails.map(async (meta: EmailMetadata) => {
+      metadataEmailsToLoad.map(async (meta) => {
         try {
           return await graphService.getEmailById(meta.email_id);
         } catch (error) {
-          console.warn("Não foi possível carregar email antigo:", meta.email_id);
+          console.warn(
+            "Não foi possível carregar email antigo guardado na BD:",
+            meta.email_id,
+          );
           return null;
         }
-      })
+      }),
     );
 
     const extraEmails = missingEmails.filter(Boolean) as Email[];
@@ -230,8 +233,8 @@ export function KanbanBoard() {
     setEmails(allEmails);
     setThreads(emailThreads);
     setEmailsMetadata(metadataMap);
-
   } catch (e) {
+    console.error("Erro ao carregar emails:", e);
     if (!isBackground) setError("Erro ao carregar");
   } finally {
     if (!isBackground) {
@@ -277,10 +280,117 @@ export function KanbanBoard() {
     } catch (error) {}
   };
 
+  const getGraphFilterQuery = () => {
+    return [filters.search, filters.sender, filters.subject]
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .join(" ");
+  };
+
+  const mergeThreadLists = (
+    baseThreads: EmailThread[],
+    extraThreads: EmailThread[],
+  ) => {
+    const threadsMap = new Map<string, EmailThread>();
+
+    [...baseThreads, ...extraThreads].forEach((thread) => {
+      const existingThread = threadsMap.get(thread.id);
+
+      if (!existingThread) {
+        threadsMap.set(thread.id, {
+          ...thread,
+          emails: [...thread.emails],
+        });
+        return;
+      }
+
+      const emailsMap = new Map<string, Email>();
+
+      existingThread.emails.forEach((email) => {
+        emailsMap.set(email.id, email);
+      });
+
+      thread.emails.forEach((email) => {
+        emailsMap.set(email.id, email);
+      });
+
+      const mergedEmails = Array.from(emailsMap.values()).sort(
+        (a, b) =>
+          new Date(a.receivedDateTime || a.sentDateTime || "").getTime() -
+          new Date(b.receivedDateTime || b.sentDateTime || "").getTime(),
+      );
+
+      const lastActivity = mergedEmails.reduce((latest, email) => {
+        const emailDate = email.receivedDateTime || email.sentDateTime || latest;
+        return new Date(emailDate) > new Date(latest) ? emailDate : latest;
+      }, existingThread.lastActivity);
+
+      threadsMap.set(thread.id, {
+        ...existingThread,
+        ...thread,
+        emails: mergedEmails,
+        participants: Array.from(
+          new Set([...existingThread.participants, ...thread.participants]),
+        ),
+        lastActivity,
+        hasUnread: mergedEmails.some((email) => !email.isRead),
+        totalEmails: mergedEmails.length,
+      });
+    });
+
+    return Array.from(threadsMap.values()).sort(
+      (a, b) =>
+        new Date(b.lastActivity).getTime() -
+        new Date(a.lastActivity).getTime(),
+    );
+  };
+
+  const getEmailSearchText = (email: Email) => {
+    const recipients = [
+      ...(email.toRecipients || []),
+      ...(email.ccRecipients || []),
+      ...(email.bccRecipients || []),
+    ]
+      .map((recipient) =>
+        [
+          recipient.emailAddress?.name,
+          recipient.emailAddress?.address,
+        ]
+          .filter(Boolean)
+          .join(" "),
+      )
+      .join(" ");
+
+    return [
+      email.subject,
+      email.bodyPreview,
+      email.from?.emailAddress?.name,
+      email.from?.emailAddress?.address,
+      recipients,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+  };
+
+  const findThreadById = (threadId: string) => {
+    return (
+      threads.find((thread) => thread.id === threadId) ||
+      filterSearchThreads.find((thread) => thread.id === threadId) ||
+      filteredThreads.find((thread) => thread.id === threadId)
+    );
+  };
+
   const handleThreadUpdated = (updatedThread: EmailThread) => {
     setThreads((prevThreads) =>
-      prevThreads.map((t) =>
-        t.id === updatedThread.id ? { ...updatedThread } : t,
+      prevThreads.map((thread) =>
+        thread.id === updatedThread.id ? { ...updatedThread } : thread,
+      ),
+    );
+
+    setFilterSearchThreads((prevThreads) =>
+      prevThreads.map((thread) =>
+        thread.id === updatedThread.id ? { ...updatedThread } : thread,
       ),
     );
   };
@@ -302,7 +412,7 @@ export function KanbanBoard() {
 
     if (activeData?.columnId === targetColId) return;
 
-    const thread = threads.find((t) => t.id === threadId);
+    const thread = findThreadById(threadId);
     if (!thread) return;
 
     try {
@@ -332,7 +442,63 @@ export function KanbanBoard() {
   };
 
   useEffect(() => {
-    let filtered = [...threads];
+  const query = getGraphFilterQuery();
+
+  if (!query || query.length < 3) {
+    setFilterSearchThreads([]);
+    setIsSearchingFilters(false);
+    return;
+  }
+
+  if (!accessToken || !account || authLoading) return;
+
+  let cancelled = false;
+
+  const timer = setTimeout(async () => {
+    try {
+      setIsSearchingFilters(true);
+
+      const graphService = new GraphService(accessToken);
+      const searchedEmails = await graphService.searchEmails(query, 100);
+
+      if (cancelled) return;
+
+      const searchedThreads =
+        graphService.groupEmailsIntoThreads(searchedEmails);
+
+      setFilterSearchThreads(searchedThreads);
+    } catch (error) {
+      if (!cancelled) {
+        console.warn("Erro ao pesquisar emails no Outlook:", error);
+        setFilterSearchThreads([]);
+      }
+    } finally {
+      if (!cancelled) {
+        setIsSearchingFilters(false);
+      }
+    }
+  }, 500);
+
+  return () => {
+    cancelled = true;
+    clearTimeout(timer);
+  };
+}, [
+  filters.search,
+  filters.sender,
+  filters.subject,
+  accessToken,
+  account?.homeAccountId,
+  authLoading,
+]);
+
+  useEffect(() => {
+    const graphQuery = getGraphFilterQuery();
+    const shouldUseGraphResults = graphQuery.length >= 3;
+
+    let filtered = shouldUseGraphResults
+      ? mergeThreadLists(threads, filterSearchThreads)
+      : [...threads];
 
     if (activeView === "kanban") {
       filtered = filtered.filter((t) => {
@@ -355,11 +521,7 @@ export function KanbanBoard() {
     if (filters.search) {
       const s = filters.search.toLowerCase();
       filtered = filtered.filter((t) =>
-        t.emails.some(
-          (e) =>
-            e.subject?.toLowerCase().includes(s) ||
-            e.bodyPreview?.toLowerCase().includes(s),
-        ),
+        t.emails.some((e) => getEmailSearchText(e).includes(s)),
       );
     }
 
@@ -370,6 +532,15 @@ export function KanbanBoard() {
           (e) =>
             e.from?.emailAddress?.address?.toLowerCase().includes(s) ||
             e.from?.emailAddress?.name?.toLowerCase().includes(s),
+        ),
+      );
+    }
+
+    if (filters.subject) {
+      const s = filters.subject.toLowerCase();
+      filtered = filtered.filter((t) =>
+        t.emails.some((e) =>
+          e.subject?.toLowerCase().includes(s),
         ),
       );
     }
@@ -426,7 +597,13 @@ export function KanbanBoard() {
     }
 
     setFilteredThreads(filtered);
-  }, [threads, filters, emailsMetadata, activeView]);
+  }, [
+    threads,
+    filterSearchThreads,
+    filters,
+    emailsMetadata,
+    activeView,
+  ]);
 
   useEffect(() => {
     if (accessToken && account && !authLoading) {
@@ -469,7 +646,7 @@ export function KanbanBoard() {
         <DndContext
           sensors={sensors}
           onDragStart={(e) =>
-            setActiveThread(threads.find((t) => t.id === e.active.id) || null)
+            setActiveThread(findThreadById(e.active.id as string) || null)
           }
           onDragEnd={handleDragEnd}
         >
@@ -820,6 +997,18 @@ export function KanbanBoard() {
       );
     }
 
+    if (activeView === "calendar") {
+      return (
+        <CalendarView
+          threads={threads}
+          emailsMetadata={emailsMetadata}
+          onUpdateMetadata={updateEmailMetadata}
+          onThreadUpdated={handleThreadUpdated}
+          onRefresh={() => loadEmails(true)}
+        />
+      );
+    }
+
     return (
       <div className="flex flex-col items-center justify-center h-[70vh] text-slate-400 space-y-4 bg-white/50 backdrop-blur-sm rounded-3xl m-8">
         <Clock className="h-12 w-12 text-slate-300" />
@@ -849,6 +1038,13 @@ export function KanbanBoard() {
           isVisible={isFiltersVisible}
           onToggleVisibility={() => setIsFiltersVisible(!isFiltersVisible)}
         />
+      )}
+
+      {isSearchingFilters && (
+        <div className="mb-6 flex items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-sm font-medium text-blue-700 shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>{t("filter_searching_outlook")}</span>
+        </div>
       )}
 
       {supabaseError && (

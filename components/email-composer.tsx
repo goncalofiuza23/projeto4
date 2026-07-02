@@ -44,6 +44,7 @@ import {
   Image as ImageIcon,
   Archive,
   Clock,
+  CalendarClock,
 } from "lucide-react";
 import { useAuth } from "./auth-provider";
 import { useLanguage } from "./language-provider";
@@ -338,6 +339,37 @@ export function EmailComposer({
 
   const [isLoading, setIsLoading] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [scheduledTime, setScheduledTime] = useState("");
+
+  const scheduleLabels =
+    language === "en"
+      ? {
+          scheduleSend: "Schedule send",
+          scheduleFor: "Schedule for",
+          sendNow: "Send now",
+          scheduledFor: "Scheduled for",
+          clearSchedule: "Clear schedule",
+          pickDate: "Choose date and time",
+          invalidTitle: "Invalid date",
+          invalidDesc: "Choose a future date and time.",
+          successTitle: "Email scheduled! 🕒",
+          successDesc: "It will be sent automatically on",
+          scheduling: "Scheduling message...",
+        }
+      : {
+          scheduleSend: "Agendar envio",
+          scheduleFor: "Agendar para",
+          sendNow: "Enviar agora",
+          scheduledFor: "Agendado para",
+          clearSchedule: "Remover agendamento",
+          pickDate: "Escolher data e hora",
+          invalidTitle: "Data inválida",
+          invalidDesc: "Escolhe uma data e hora no futuro.",
+          successTitle: "E-mail agendado! 🕒",
+          successDesc: "Será enviado automaticamente a",
+          scheduling: "A agendar mensagem...",
+        };
+
   const [emailData, setEmailData] = useState<EmailDraft>({
     subject: "",
     body: { contentType: "html", content: "" },
@@ -491,6 +523,8 @@ export function EmailComposer({
 
   useEffect(() => {
     if (!isOpen) return;
+
+    setScheduledTime("");
 
     if (!originalEmail) {
       if (mode === "new") {
@@ -713,8 +747,52 @@ ${ccLine}<b>${t("history_subject")}</b> ${originalEmail.subject || ""}</p>
     }
   };
 
+  const getDefaultSendAction = () => {
+    if (mode === "forward") {
+      return { type: "send", label: t("forward") };
+    }
+
+    if (mode === "reply" || mode === "replyAll") {
+      return { type: "send", label: t("reply") };
+    }
+
+    return { type: "send", label: t("send_msg") };
+  };
+
+  const getLocalDateTimeValue = (date: Date) => {
+    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return localDate.toISOString().slice(0, 16);
+  };
+
+  const getMinScheduleDateTime = () => {
+    const date = new Date();
+    date.setMinutes(date.getMinutes() + 1);
+    return getLocalDateTimeValue(date);
+  };
+
+  const formatScheduledTime = () => {
+    if (!scheduledTime) return "";
+
+    return new Date(scheduledTime).toLocaleString(
+      language === "en" ? "en-US" : "pt-PT",
+      {
+        dateStyle: "short",
+        timeStyle: "short",
+      },
+    );
+  };
+
   const handleSend = async () => {
     if (!accessToken || isLoading) return;
+
+    if (scheduledTime && new Date(scheduledTime).getTime() <= Date.now()) {
+      toast({
+        title: scheduleLabels.invalidTitle,
+        description: scheduleLabels.invalidDesc,
+        variant: "destructive",
+      });
+      return;
+    }
     
     setIsLoading(true);
 
@@ -773,6 +851,15 @@ ${ccLine}<b>${t("history_subject")}</b> ${originalEmail.subject || ""}</p>
           attachments: attachmentsData,
         };
 
+        if (scheduledTime) {
+          finalEmailData.singleValueExtendedProperties = [
+            {
+              id: "SystemTime 0x3FEF",
+              value: new Date(scheduledTime).toISOString(),
+            },
+          ];
+        }
+
         switch (mode) {
           case "new":
             await graphService.sendEmail(finalEmailData);
@@ -811,9 +898,11 @@ ${ccLine}<b>${t("history_subject")}</b> ${originalEmail.subject || ""}</p>
         }
 
         toast({
-          title: t("send_success"),
-          description: t("send_success_desc"),
-          duration: 4000,
+          title: scheduledTime ? scheduleLabels.successTitle : t("send_success"),
+          description: scheduledTime 
+            ? `${scheduleLabels.successDesc} ${formatScheduledTime()}`
+            : t("send_success_desc"),
+          duration: 5000,
         });
 
         if (onEmailSent) {
@@ -826,11 +915,13 @@ ${ccLine}<b>${t("history_subject")}</b> ${originalEmail.subject || ""}</p>
           description: error instanceof Error ? error.message : t("unexpected_error"),
           variant: "destructive",
         });
+      } finally {
+        setIsLoading(false);
       }
     }, 10000);
 
     toast({
-      title: t("sending_msg"),
+      title: scheduledTime ? scheduleLabels.scheduling : t("sending_msg"),
       description: <UndoCountdown />,
       duration: 10000,
       action: (
@@ -838,6 +929,7 @@ ${ccLine}<b>${t("history_subject")}</b> ${originalEmail.subject || ""}</p>
           altText={t("undo_send")} 
           onClick={() => {
             clearTimeout(timeoutId);
+            setIsLoading(false);
             toast({
               title: t("send_undone"),
               description: t("send_undone_desc"),
@@ -1224,90 +1316,153 @@ ${ccLine}<b>${t("history_subject")}</b> ${originalEmail.subject || ""}</p>
                 {t("cancel_btn")}
               </Button>
               
-              <div className="flex items-center">
-                {mode === "new" ? (
-                  <Button
-                    onClick={handleSend}
-                    disabled={isLoading || !toInput.trim() || !emailData.subject.trim()}
-                    className="rounded-xl px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md blue-200"
-                  >
-                    {isLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : (
-                      <Send className="h-4 w-4 mr-2" />
-                    )}
-                    {sendAction.label}
-                  </Button>
-                ) : (
-                  <div className="flex items-center rounded-xl bg-blue-600 shadow-md shadow-blue-200 transition-colors hover:bg-blue-700">
-                    <Button
-                      onClick={handleSend}
-                      disabled={isLoading || !toInput.trim() || !emailData.subject.trim()}
-                      className="rounded-l-xl rounded-r-none px-5 bg-transparent hover:bg-transparent shadow-none text-white font-bold h-10 border-r border-blue-500/50 focus:ring-0"
-                    >
-                      {isLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      ) : (
-                        <Send className="h-4 w-4 mr-2" />
-                      )}
-                      {sendAction.label}
-                    </Button>
+              <div className="flex items-center rounded-xl bg-blue-600 shadow-md shadow-blue-200 transition-colors hover:bg-blue-700">
+                <Button
+                  onClick={handleSend}
+                  disabled={isLoading || !toInput.trim() || !emailData.subject.trim()}
+                  className="rounded-l-xl rounded-r-none px-5 bg-transparent hover:bg-transparent shadow-none text-white font-bold h-10 border-r border-blue-500/50 focus:ring-0"
+                >
+                  {isLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : scheduledTime ? (
+                    <CalendarClock className="h-4 w-4 mr-2" />
+                  ) : (
+                    <Send className="h-4 w-4 mr-2" />
+                  )}
 
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          disabled={isLoading || !toInput.trim() || !emailData.subject.trim()}
-                          className="rounded-r-xl rounded-l-none px-2.5 bg-transparent hover:bg-transparent shadow-none text-white h-10 focus:ring-0"
-                        >
-                          <ChevronDown className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-64 rounded-xl border-slate-100 shadow-xl">
-                        <DropdownMenuItem 
-                          onClick={() => setSendAction({ type: 'send', label: mode === 'forward' ? t("forward") : t("reply") })}
-                          className="cursor-pointer py-2 font-medium"
-                        >
-                          <Send className="mr-2 h-4 w-4 text-slate-500" /> 
-                          {mode === 'forward' ? t("only_forward") : t("only_reply")}
-                        </DropdownMenuItem>
-                        
+                  {scheduledTime ? scheduleLabels.scheduleSend : sendAction.label}
+                </Button>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      disabled={isLoading || !toInput.trim() || !emailData.subject.trim()}
+                      className="rounded-r-xl rounded-l-none px-2.5 bg-transparent hover:bg-transparent shadow-none text-white h-10 focus:ring-0"
+                    >
+                      <ChevronDown className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-72 rounded-xl border-slate-100 shadow-xl"
+                  >
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setScheduledTime("");
+                        setSendAction(getDefaultSendAction());
+                      }}
+                      className="cursor-pointer py-2 font-medium"
+                    >
+                      <Send className="mr-2 h-4 w-4 text-slate-500" />
+                      {mode === "forward"
+                        ? t("only_forward")
+                        : mode === "reply" || mode === "replyAll"
+                          ? t("only_reply")
+                          : scheduleLabels.sendNow}
+                    </DropdownMenuItem>
+
+                    <DropdownMenuSeparator className="bg-slate-100" />
+
+                    <div
+                      className="px-2 py-2 space-y-2"
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                        <CalendarClock className="h-4 w-4 text-blue-500" />
+                        {scheduleLabels.scheduleFor}
+                      </div>
+
+                      <Input
+                        type="datetime-local"
+                        value={scheduledTime}
+                        min={getMinScheduleDateTime()}
+                        onChange={(e) => setScheduledTime(e.target.value)}
+                        className="h-10 rounded-xl bg-slate-50 border-slate-200 text-xs text-slate-700"
+                        title={scheduleLabels.pickDate}
+                      />
+
+                      {scheduledTime && (
+                        <div className="rounded-lg bg-blue-50 border border-blue-100 px-2 py-1.5">
+                          <p className="text-[11px] font-medium text-blue-700">
+                            {scheduleLabels.scheduledFor} {formatScheduledTime()}
+                          </p>
+
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setScheduledTime("")}
+                            className="mt-1 h-6 px-2 text-[11px] text-red-500 hover:text-red-600 hover:bg-red-50 rounded-md"
+                          >
+                            <X className="h-3 w-3 mr-1" />
+                            {scheduleLabels.clearSchedule}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    {mode !== "new" && (
+                      <>
                         <DropdownMenuSeparator className="bg-slate-100" />
-                        
-                        <DropdownMenuItem 
-                          onClick={() => setSendAction({ type: 'archive', label: t("send_archive") })}
+
+                        <DropdownMenuItem
+                          onClick={() =>
+                            setSendAction({
+                              type: "archive",
+                              label: t("send_archive"),
+                            })
+                          }
                           className="cursor-pointer py-2 font-medium"
                         >
-                          <Archive className="mr-2 h-4 w-4 text-amber-500" /> {t("send_archive")}
+                          <Archive className="mr-2 h-4 w-4 text-amber-500" />
+                          {t("send_archive")}
                         </DropdownMenuItem>
-                        
-                        <DropdownMenuItem 
-                          onClick={() => setSendAction({ type: 'snooze', label: t("send_snooze") })}
+
+                        <DropdownMenuItem
+                          onClick={() =>
+                            setSendAction({
+                              type: "snooze",
+                              label: t("send_snooze"),
+                            })
+                          }
                           className="cursor-pointer py-2 font-medium"
                         >
-                          <Clock className="mr-2 h-4 w-4 text-indigo-500" /> {t("send_snooze")}
+                          <Clock className="mr-2 h-4 w-4 text-indigo-500" />
+                          {t("send_snooze")}
                         </DropdownMenuItem>
 
                         {customColumns.length > 0 && (
                           <>
                             <DropdownMenuSeparator className="bg-slate-100" />
+
                             <div className="px-2 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                               {t("send_move_to")}
                             </div>
-                            {customColumns.map(col => (
-                              <DropdownMenuItem 
+
+                            {customColumns.map((col) => (
+                              <DropdownMenuItem
                                 key={col.id}
-                                onClick={() => setSendAction({ type: 'column', payload: col.id, label: `${t("send_to_col")} ${col.name}` })}
+                                onClick={() =>
+                                  setSendAction({
+                                    type: "column",
+                                    payload: col.id,
+                                    label: `${t("send_to_col")} ${col.name}`,
+                                  })
+                                }
                                 className="cursor-pointer py-2 font-medium"
                               >
-                                <span className="mr-2 text-base">{col.icon || "📁"}</span> {col.name}
+                                <span className="mr-2 text-base">{col.icon || "📁"}</span>
+                                {t("send_to_col")} {col.name}
                               </DropdownMenuItem>
                             ))}
                           </>
                         )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                )}
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           </div>

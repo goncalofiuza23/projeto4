@@ -18,6 +18,7 @@ import {
   AlertOctagon,
   Settings,
   Send,
+  Calendar,
 } from "lucide-react";
 import { ColumnManager } from "./column-manager";
 import { EmailComposer } from "./email-composer";
@@ -281,6 +282,9 @@ export function DashboardLayout({
               </p>
             )}
             {renderMenuItem("kanban", LayoutDashboard, t("menu_kanban"))}
+            
+            {renderMenuItem("calendar", Calendar, t("menu_calendar"))}
+
             {renderMenuItem("sent", Send, t("menu_sent"))}
             {renderMenuItem("snoozed", Clock, t("menu_snoozed"))}
             {renderMenuItem("archived", Archive, t("menu_archived"))}

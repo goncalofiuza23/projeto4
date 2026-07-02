@@ -128,6 +128,11 @@ export interface EmailDraft {
     contentBytes: string;
     contentType: string;
   }>;
+  // A PROPRIEDADE MÁGICA DE AGENDAMENTO
+  singleValueExtendedProperties?: Array<{
+    id: string;
+    value: string;
+  }>;
 }
 
 export class GraphService {
@@ -313,6 +318,37 @@ export class GraphService {
     } catch (error) {
       return this.getEmails(top);
     }
+  }
+
+  async searchEmails(query: string, top = 100): Promise<Email[]> {
+    const cleanQuery = query.trim().replace(/"/g, '\\"');
+
+    if (!cleanQuery) return [];
+
+    const response = await this.makeRequest(
+      `https://graph.microsoft.com/v1.0/me/messages?$search=${encodeURIComponent(`"${cleanQuery}"`)}&$top=${top}&$select=id,subject,bodyPreview,from,receivedDateTime,sentDateTime,isRead,importance,hasAttachments,toRecipients,ccRecipients,bccRecipients,replyTo,parentFolderId,conversationId,conversationIndex,internetMessageId`,
+      {
+        headers: {
+          ConsistencyLevel: "eventual",
+        },
+      },
+    );
+
+    const data = await response.json();
+    const userEmail = await this.getUserEmail();
+
+    return data.value.map((email: any) => {
+      const isFromMe =
+        email.from?.emailAddress?.address?.toLowerCase() ===
+        userEmail.toLowerCase();
+
+      return {
+        ...email,
+        receivedDateTime: email.receivedDateTime || email.sentDateTime,
+        isFromMe,
+        folderType: isFromMe ? "sent" : "inbox",
+      };
+    });
   }
 
   groupEmailsIntoThreads(emails: Email[]): EmailThread[] {
